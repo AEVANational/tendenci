@@ -54,7 +54,10 @@
 
                         {% if profile.address %}
                             {% if request.user.profile.is_superuser or not profile.hide_address or can_edit_profile %}
-                                <b>{% trans "Address:" %}</b> {{ profile.address }}<br />
+                                <b>{% trans "Address:" %}</b> {{ profile.address }}
+			    	{% if profile.city %}, {{ profile.city }} {% endif %}
+			    	{% if profile.state %}, {{ profile.state }} {% endif %}
+			    	<br />
                             {% endif %}
                         {% endif %}
 
