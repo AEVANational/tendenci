@@ -40,7 +40,8 @@ from tendenci.apps.corporate_memberships.managers import (
                                                 CorpMembershipManager,
                                                 CorpMembershipAppManager,
                                                 CorpProfileManager,
-                                                CorpMembershipTypeManager)
+                                                CorpMembershipTypeManager,
+                                                CorpMembershipRepManager)
 #from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.user_groups.models import GroupMembership
 from tendenci.apps.payments.models import PaymentMethod, Payment
@@ -907,7 +908,7 @@ class CorpMembership(TendenciBaseModel):
             else:
                 q_obj = q_obj_or
         if q_obj:
-            return CorpMembership.objects.filter(q_obj)
+            return CorpMembership.objects.filter(q_obj).distinct()
         else:
             return CorpMembership.objects.all()
 
@@ -2124,6 +2125,7 @@ class CorpMembershipRep(models.Model):
                                       default=True, blank=True)
     is_member_rep = models.BooleanField(_('is member rep?'),
                                     default=True, blank=True)
+    objects = CorpMembershipRepManager()
 
     class Meta:
         verbose_name = _("Corporate Membership Representative")
@@ -2453,16 +2455,24 @@ class Notice(models.Model):
                         context={'corp_membership': corporate_membership,
                          'corp_app': corp_app})
 
+        rep_first_name = ''
+        rep_last_name = ''
+        rep_salutation = ''
         if recipient:
             rep_first_name = recipient.user.first_name
+            rep_last_name = recipient.user.last_name
+            if hasattr(recipient.user, 'profile') and recipient.user.profile.salutation:
+                rep_salutation = recipient.user.profile.salutation
         elif corporate_membership.anonymous_creator:
             rep_first_name = corporate_membership.anonymous_creator.first_name
-        else:
-            rep_first_name = ''
+            rep_last_name = corporate_membership.anonymous_creator.last_name
+
         context.update({
             'expire_dt': expire_dt,
             'payment_method': payment_method,
             'rep_first_name': rep_first_name,
+            'rep_last_name': rep_last_name,
+            'rep_salutation': rep_salutation,
             'renewed_individuals_list': renewed_individuals_list,
             'total_individuals_renewed': total_individuals_renewed,
             'name': corporate_membership.corp_profile.name,

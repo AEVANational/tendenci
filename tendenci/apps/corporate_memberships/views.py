@@ -96,7 +96,7 @@ from tendenci.apps.perms.decorators import superuser_required
 from tendenci.apps.base.utils import send_email_notification
 from tendenci.apps.profiles.models import Profile
 from tendenci.apps.site_settings.utils import get_setting
-from tendenci.apps.base.utils import escape_csv
+from tendenci.apps.base.utils import escape_csv, get_next_url
 from tendenci.apps.emails.models import Email
 
 
@@ -679,8 +679,13 @@ def corpmembership_edit(request, id,
                     send_email_notification('corp_memb_edited',
                                             recipients,
                                             extra_context)
+            msg_string = f'Successfully edited {str(corp_membership)}'
+            messages.add_message(request, messages.SUCCESS, _(msg_string))
             # log an event
             EventLog.objects.log(instance=corp_membership)
+            next_page = get_next_url(request)
+            if next_page:
+                return HttpResponseRedirect(next_page)
             # redirect to view
             return HttpResponseRedirect(reverse('corpmembership.view',
                                                 args=[corp_membership.id]))
@@ -955,6 +960,8 @@ def corpmembership_search(request, my_corps_only=False,
         corp_members = corp_members.exclude(status_detail='archive').order_by('corp_profile__name')
         if not my_corps_only and not is_superuser:
             corp_members = corp_members.exclude(status_detail='expired')
+
+        corp_members = corp_members.filter(corp_profile__status=True)
 
     if not corp_members.exists():
         del search_form.fields['cp_id']
@@ -1940,6 +1947,7 @@ def corpmembership_export(request,
 
 
 @is_enabled('corporate_memberships')
+@login_required
 def edit_corp_reps(request, id, form_class=CorpMembershipRepForm,
                    template_name="corporate_memberships/reps/edit.html"):
     corp_memb = get_object_or_404(CorpMembership, pk=id)
@@ -1971,53 +1979,23 @@ def edit_corp_reps(request, id, form_class=CorpMembershipRepForm,
 
             corp_membership_update_perms(corp_memb)
 
+            msg_string = _('Representative added successfully')
+            messages.add_message(request, messages.SUCCESS, msg_string)
+            
             if (request.POST.get('submit', '')).lower() == 'save':
                 return HttpResponseRedirect(reverse('corpmembership.view',
                                                     args=[corp_memb.id]))
 
     return render_to_resp(request=request, template_name=template_name,
         context={'corp_membership': corp_memb,
-                                              'form': form,
-                                              'reps': reps})
+                  'form': form,
+                  'join_under_corp_url': reverse('membership_default.add_under_corp', args=[corp_memb.id]),
+                  'reps': reps})
 
 
 @is_enabled('corporate_memberships')
 def corp_reps_lookup(request):
-    q = request.GET['term']
-    #use_search_index = (get_setting('site', 'global', 'searchindex') in ('true', True))
-    # TODO: figure out a way of assigning search permission to dues_reps.
-    use_search_index = False
-    if use_search_index:
-        profiles = Profile.objects.search(
-                            q,
-                            user=request.user
-                            ).order_by('last_name_exact')
-    else:
-        # they don't have search index, probably just check username only
-        # for the performance sake
-        profiles = Profile.objects.filter(
-                                 Q(user__first_name__istartswith=q)
-                               | Q(user__last_name__istartswith=q)
-                               | Q(user__username__istartswith=q)
-                               | Q(user__email__istartswith=q))
-        profiles = profiles.order_by('user__last_name')
-
-    if profiles and len(profiles) > 10:
-        profiles = profiles[:10]
-
-    if use_search_index:
-        users = [p.object.user for p in profiles]
-    else:
-        users = [p.user for p in profiles]
-
-    results = []
-    for u in users:
-        value = '%s, %s (%s) - %s' % (u.last_name, u.first_name,
-                                      u.username, u.email)
-        u_dict = {'id': u.id, 'label': value, 'value': value}
-        results.append(u_dict)
-    return HttpResponse(simplejson.dumps(results),
-                        content_type='application/json')
+    pass
 
 
 @is_enabled('corporate_memberships')
