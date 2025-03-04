@@ -253,11 +253,13 @@ def membership_details(request, id=0, template_name="memberships/details.html"):
 
     has_approve_perm = has_perm(request.user, 'memberships.approve_membershipdefault') and \
                 has_perm(request.user, 'memberships.change_membershipdefault')
-    
+    has_view_perm = has_perm(request.user, 'memberships.view_membershipdefault')
+
     # allow only superuser, or owner or users with the approve permission to view this page
     if not any((request.user.profile.is_superuser,
             request.user == membership.user,
-            has_approve_perm)):
+            has_approve_perm,
+            has_view_perm)):
         raise Http403
 
     if request.user.profile.is_superuser or has_approve_perm:
@@ -1168,9 +1170,12 @@ def membership_default_add(request, slug='', membership_id=None,
         if membership_renewed:
             inv = membership_renewed.get_invoice()
             if inv and inv.balance > 0:
-                return HttpResponseRedirect(reverse(
-                        'payment.pay_online',
-                        args=[inv.pk, inv.guid]))
+                # Check that this membership is paid online before launching online payment
+                # Additional check could be added to confirm that online payment configuration is in place
+                if membership.is_paid_online():
+                    return HttpResponseRedirect(reverse(
+                            'payment.pay_online',
+                            args=[inv.pk, inv.guid]))
             view_url = membership_renewed.get_absolute_url()
             if membership_renewed.status_detail == 'pending':
                 msg_string = _(f'Your membership renewal application is pending for admin approval. <a href="{view_url}">View Membership</a>')
@@ -1529,8 +1534,6 @@ def membership_default_add(request, slug='', membership_id=None,
         if memberships:
 
             membership_set = MembershipSet()
-            invoice = membership_set.save_invoice(memberships, app)
-            invoice.entity = memberships[0].entity
 
             discount_code = membership_form2.cleaned_data.get('discount_code', None)
             discount_amount = Decimal(0)
@@ -1541,12 +1544,16 @@ def membership_default_add(request, slug='', membership_id=None,
                 if discount and discount.available_for(1):
                     amount_list, discount_amount, discount_list, msg = assign_discount(amount_list, discount)
                     # apply discount to invoice
-                    invoice.discount_code = discount_code
-                    invoice.discount_amount = discount_amount
-                    invoice.subtotal -= discount_amount
-                    invoice.total -= discount_amount
-                    invoice.balance -= discount_amount
-                    invoice.save()
+                    discount_code = discount_code
+
+            if memberships[0].auto_renew:
+                # handle auto renew discount
+                auto_renew_discount = get_setting('module', 'memberships', 'autorenewdiscount')
+                if auto_renew_discount:
+                    discount_amount += discount_amount
+
+            invoice = membership_set.save_invoice(memberships, app, discount_code=discount_code, discount_amount=discount_amount)
+            invoice.entity = memberships[0].entity
 
             if discount_code and discount:
                 for dmount in discount_list:
@@ -1566,17 +1573,6 @@ def membership_default_add(request, slug='', membership_id=None,
                         invoice.total += donation_amount
                         invoice.balance += donation_amount
                         invoice.save()
-
-            if memberships[0].auto_renew:
-                # handle auto renew discount
-                auto_renew_discount = get_setting('module', 'memberships', 'autorenewdiscount')
-                if auto_renew_discount and invoice.balance > auto_renew_discount:
-                    invoice.discount_amount = auto_renew_discount
-                    invoice.subtotal -= auto_renew_discount
-                    invoice.total -= auto_renew_discount
-                    invoice.balance -= auto_renew_discount
-                    invoice.save()
-                    
 
             memberships_join_notified = []
             memberships_renewal_notified = []

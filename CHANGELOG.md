@@ -1,3 +1,31 @@
+### 15.3.2 [2025-2-24]
+
+* Allowed event addons to be added without options specified.
+* Updated "marks as paid" so that if an admin marks an invoice as paid, the associated object (membership, corporate membership, etc) will be automatically updated if needed.
+* Updated the ICS export to include ongoing events.
+* Updated corp export to make region field a name instead of ID.
+* Updated event registration to handle inactive or anonymous users register user-only events.
+* Fixed a format issue for directories on /search/.
+* Fixed the issue about tax is calculated before discount being applied for memberships.
+* Fixed the issue regarding members not being able to find member-only content in search.
+* Changed "Submit" to "Complete Registration" on register_child_events.html (Thanks to b-davies24).
+* Other minor fixes.
+
+
+### 15.3.1 [2025-1-2]
+
+* **SECURITY**: Fixed a potential XSS vulnerability in forums.
+* Added the filter "Event Type" to event financial report.
+* Added the export option to /admin/auth/user/.
+* Added header image field to study groups.
+* Added 2 tokens, rep_last_name and rep_salutation, to corp notices
+* Added the “unrelease” option to the action dropdown for Registrant Credits.
+* Updated event registration to redirect non-members to 403 if the only pricing is for member-only.
+* Updated memberships to avoid duplicate memberships submissions on renewal.
+* Resolved tinymce menu inoperable in fullscreen.
+* Other minor updates and fixes.
+
+
 ### 15.3 [2024-11-21]
 
 * Updated add/edit corp reps to remove the auto-complete with a list of possible email addresses.

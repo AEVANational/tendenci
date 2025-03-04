@@ -41,8 +41,10 @@ def reports_overview(request, template_name="invoices/reports/overview.html"):
     today = date.today()
     first_date_of_year = date(today.year, 1, 1)
     is_y2d = False
-    form = ReportsOverviewForm(request.GET, initial={'start_dt': first_date_of_year,
-                                                     'end_dt': today})
+    start_dt = first_date_of_year
+    end_dt = today
+    form = ReportsOverviewForm(request.GET, initial={'start_dt': start_dt,
+                                                     'end_dt': end_dt})
     [earliest_dt] = Invoice.objects.order_by('create_dt').values_list('create_dt', flat=True)[:1] or [None]
     if earliest_dt:
         form.fields['start_dt'].help_text = _(f'Earliest date: {earliest_dt.strftime("%Y-%m-%d")}')
@@ -108,6 +110,17 @@ def reports_overview(request, template_name="invoices/reports/overview.html"):
         for item in total_cc_by_object_type:
             if item['sum']:
                 total_cc_d[item['invoice__object_type__app_label'] or 'unknown'] = [item['sum'], '{0:.2%}'.format(item['sum']/total_cc)]
+
+    else:
+        total_amount_d = {}
+        amount_paid_d = {}
+        balance_d = {}
+        total_cc_d = {}
+        invoice_total_amount = 0
+        invoice_total_amount_paid = 0
+        invoice_total_balance = 0
+        total_cc = 0
+        total_refunds = 0
 
     return render_to_resp(request=request, template_name=template_name,
         context={'form':form,
@@ -187,9 +200,10 @@ def mark_as_paid(request, id, template_name='invoices/mark-as-paid.html'):
         raise Http403
 
     if request.method == 'POST':
-        form = MarkAsPaidForm(request.POST)
+        form = MarkAsPaidForm(request.POST, request=request, invoice=invoice)
 
         if form.is_valid():
+            update_obj = form.cleaned_data.get('update_obj', None)
 
             # make payment record
             payment = form.save(
@@ -217,6 +231,10 @@ def mark_as_paid(request, id, template_name='invoices/mark-as-paid.html'):
                         obj.send_registrant_notification()
                 elif obj.__class__.__name__ == 'AssetsPurchase':
                     obj.auto_update_paid_object(request, payment)
+                else:
+                    if update_obj and request.user.is_superuser:
+                        if hasattr(obj, 'auto_update_paid_object'):
+                            obj.auto_update_paid_object(request, payment)
                 
                 EventLog.objects.log(instance=invoice)
                 messages.add_message(
@@ -227,7 +245,7 @@ def mark_as_paid(request, id, template_name='invoices/mark-as-paid.html'):
             return redirect(invoice)
 
     else:
-        form = MarkAsPaidForm(initial={
+        form = MarkAsPaidForm(invoice=invoice, request=request, initial={
             'amount': invoice.balance, 'submit_dt': datetime.now()})
 
     return render_to_resp(

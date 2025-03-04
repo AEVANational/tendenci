@@ -2229,6 +2229,16 @@ def purchase_assets(request, event_id, form_class=AssetsPurchaseForm,
                 return HttpResponseRedirect(reverse('payment.pay_online',
                                     args=[assets_purchaser.invoice.id,
                                           assets_purchaser.invoice.guid]))
+            elif assets_purchaser.invoice.balance == 0:
+                assets_purchaser.status_detail = 'approved'
+                assets_purchaser.save()
+    
+                assets_purchaser.email_purchased()
+                assets_purchaser.email_purchased(to_admin=True)
+                msg_string = _('Successfully purchased event assets. Thank you!')
+                messages.add_message(request, messages.SUCCESS, _(msg_string))
+                return HttpResponseRedirect(reverse('event', args=[event_id]))
+                
             return HttpResponseRedirect(reverse('invoice.view', args=[assets_purchaser.invoice.id]))
 
     
@@ -2577,6 +2587,10 @@ def register(request, event_id=0,
         event.free_event = not bool([p for p in pricings if p.price > 0])
         pricing = None
 
+    active_user_may_required = False
+    if anony_setting == 'validated' and pricings.filter(allow_anonymous=False, allow_user=True).exists():
+        active_user_may_required = True
+
     # check if using a custom reg form
     custom_reg_form = None
     if reg_conf.use_custom_reg_form:
@@ -2884,7 +2898,8 @@ def register(request, event_id=0,
         'grand_total': subtotal + total_tax,
         'add_more_registrants' : add_more_registrants,
         'flat_ignore_fields' : flat_ignore_fields,
-        'currency_symbol' : get_setting("site", "global", "currencysymbol") or '$'
+        'currency_symbol' : get_setting("site", "global", "currencysymbol") or '$',
+        'active_user_may_required': active_user_may_required
     })
 
 
@@ -4274,25 +4289,11 @@ def registrant_roster(request, event_id=0, roster_view='', template_name='events
     # assign addons
     addon_total_sum = Decimal('0')
     if has_addons:
-        reg8n_to_addons_list = RegAddonOption.objects.filter(
-            regaddon__registration__in=registrations).values_list(
-                'regaddon__registration__id',
-                'regaddon__addon__title',
-                'option__title',
-                'regaddon__amount')
-
-        if reg8n_to_addons_list:
-            addon_total_sum = sum([item[3] for item in reg8n_to_addons_list])
-            for registrant in registrants:
-                if registrant.is_primary:
-                    registrant.addons = ''
-                    registrant.addons_amount = Decimal('0')
-                    for addon_item in reg8n_to_addons_list:
-                        if addon_item[0] == registrant.registration_id:
-                            registrant.addons += addon_item[1]
-                            if addon_item[2]:
-                                registrant.addons += f'({addon_item[2]})'
-                            registrant.addons_amount += addon_item[3]
+        for registrant in registrants:
+            if registrant.is_primary:
+                registrant.addons, registrant.addons_amount = registrant.registration.get_addons_with_amount()
+                if registrant.addons_amount:
+                    addon_total_sum += registrant.addons_amount
 
     total_sum = float(0)
     balance_sum = float(0)

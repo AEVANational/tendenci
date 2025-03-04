@@ -1384,21 +1384,34 @@ class Registration(models.Model):
         addons_text = ''
         if not self.event.has_addons:
             return ''
-
-        reg8n_to_addons_list = RegAddonOption.objects.filter(
-            regaddon__registration=self).values_list(
-                'regaddon__registration__id',
-                'regaddon__addon__title',
-                'option__title',
-                'regaddon__amount')
-
-        if reg8n_to_addons_list:
+        
+        reg_addons = self.regaddon_set.all()
+        if reg_addons:
             currency_symbol = get_setting('site', 'global', 'currencysymbol')
-            for addon_item in reg8n_to_addons_list:
-                if addon_item[0] == self.registrant.registration_id:
-                    addons_text += f'{addon_item[1]}({addon_item[2]})({currency_symbol}{addon_item[3]}) '
+            for reg_addon in reg_addons:
+                addon_title = reg_addon.addon.title
+                option = reg_addon.get_option()
+                if option:
+                    addon_title += f'({option})'
+                if reg_addon.amount:
+                    addons_text += f'{addon_title}({currency_symbol}{reg_addon.amount}) '
+                else:
+                    addons_text += f'{addon_title} '
 
         return addons_text
+
+    def get_addons_with_amount(self):
+        reg_addons = self.regaddon_set.all()
+        addons = []
+        addons_amount = 0
+        for reg_addon in reg_addons:
+            addon_title = reg_addon.addon.title
+            option = reg_addon.get_option()
+            if option:
+                addon_title += f'({option})'
+            addons.append(addon_title)
+            addons_amount += reg_addon.amount
+        return ', '.join(addons), addons_amount
 
     def send_registrant_notification(self):
         primary_registrant = self.registrant
@@ -1574,9 +1587,9 @@ class Registrant(models.Model):
         nested events are enabled, event has child events
         """
         return (
-            not self.registration_closed and
             self.event.nested_events_enabled and
-            self.event.has_child_events
+            self.event.has_child_events and
+            not self.registration_closed
         )
     
     def sub_event_datetimes(self, is_admin=False):
@@ -2274,6 +2287,9 @@ class AssetsPurchase(models.Model):
     def is_paid(self):
         return self.invoice and self.invoice.balance <= 0
 
+    def is_free(self):
+        return self.invoice and self.invoice.total == 0
+
     def email_purchased(self, to_admin=False):
         """
         Email to user or admins that event assets purchased.
@@ -2965,6 +2981,11 @@ class Event(TendenciBaseModel):
     def sponsor(self):
         """Access Sponsor for this Event"""
         return self.sponsor_set.first()
+
+    @property
+    def featured_speakers(self):
+        """Featured speakers for this Event"""
+        return self.speaker_set.filter(featured=True)
 
     @property
     def organizer(self):
@@ -4320,6 +4341,9 @@ class Addon(OrderingBaseModel):
     def field_name(self):
         return "%s_%s" % (self.pk, self.title.lower().replace(' ', '').replace('-', ''))
 
+    def has_options(self):
+        return self.options.exists()
+
 
 class AddonOption(models.Model):
     addon = models.ForeignKey(Addon, related_name="options", on_delete=models.CASCADE)
@@ -4362,6 +4386,10 @@ class RegAddon(models.Model):
     def __str__(self):
         return "%s: %s" % (self.registration.pk, self.addon.title)
 
+    def get_option(self):
+        if self.regaddonoption_set.exists():
+            return self.regaddonoption_set.first().option.title
+        return ''
 
 class RegAddonOption(models.Model):
     """Selected event registration addon option.
