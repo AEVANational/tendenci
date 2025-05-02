@@ -1739,7 +1739,8 @@ def membership_default_edit(request, id, template='memberships/applications/add.
         app_fields,
         request.POST or None,
         request=request,
-        instance=user)
+        instance=user,
+        edit_mode=True)
 
     profile_form = ProfileForm(
         app_fields,
@@ -2635,6 +2636,7 @@ def report_renewed_members(request, template_name='reports/renewed_members.html'
         table_header = [
             'id',
             'member number',
+            'member type',
             'last name',
             'first name',
             'email',
@@ -2651,6 +2653,7 @@ def report_renewed_members(request, template_name='reports/renewed_members.html'
             table_data.append([
                 mem.id,
                 mem.member_number,
+                mem.membership_type.name,
                 mem.user.last_name,
                 mem.user.first_name,
                 mem.user.email,

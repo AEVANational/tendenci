@@ -727,6 +727,14 @@ class CorpMembership(TendenciBaseModel):
         """
         return reverse('corpmembership.view', args=[self.pk])
 
+    def get_previous_payment_credits(self):
+        if self.renewal and self.renew_from_id:
+            from_corp_member = CorpMembership.objects.filter(id=self.renew_from_id).first()
+            if from_corp_member and from_corp_member.invoice:
+                if from_corp_member.invoice.balance < 0:
+                    return from_corp_member.invoice.id, from_corp_member.invoice.balance * (-1)
+        return 0, 0
+
     def donation_add(self, request_user):
         """
         Add a donation record, along with its invoice.
@@ -1302,6 +1310,9 @@ class CorpMembership(TendenciBaseModel):
                 self.owner_username = request_user.username
             self.save()
             
+            # archive old corp_memberships
+            self.archive_old()
+            
             # directory
             if self.corp_profile.directory:
                 directory = self.corp_profile.directory
@@ -1640,6 +1651,18 @@ class CorpMembership(TendenciBaseModel):
                                     status_detail='active'
                                     ).order_by('-expiration_dt')[:1] or [None]
             return latest_renewed
+
+        return None
+
+    def latest_renewed_in_pending(self):
+        """
+        Get the latest renewed corpMembership that is still in pending.
+        """
+        corp_profile = self.corp_profile
+        latest_corp_membership = corp_profile.corp_membership
+        if latest_corp_membership and latest_corp_membership.id != self.id:
+            if 'pending' in latest_corp_membership.status_detail:
+                return latest_corp_membership
 
         return None
 

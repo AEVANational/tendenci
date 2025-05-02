@@ -1253,9 +1253,6 @@ def corp_renew(request, id,
                 new_corp_membership.owner_username = request.user.username
                 new_corp_membership.expiration_dt = new_corp_membership.get_expiration_dt()
 
-                # archive old corp_memberships
-                new_corp_membership.archive_old()
-
                 # calculate the total price for invoice
                 corp_memb_type = form.cleaned_data[
                                             'corporate_membership_type']
@@ -1431,14 +1428,19 @@ def corp_renew(request, id,
                                     ] + summary_data['above_cap_individual_total'] + summary_data['corp_price']
     cap_enabled = corpmembership_app.corp_memb_type.filter(apply_cap=True).count() > 0
     tax_rate_display = corp_membership.corp_profile.get_tax_rate_display(corpmembership_app)
-        
+
+    payment_credits = 0
+    if get_setting('module', 'invoices', 'cancarryover'):
+        if corp_membership.invoice and corp_membership.invoice.balance < 0:
+            payment_credits = corp_membership.invoice.balance * (-1)  
     context = {"corp_membership": corp_membership,
                'corp_profile': corp_membership.corp_profile,
                'corp_app': corpmembership_app,
                'form': form,
                'summary_data': summary_data,
                'cap_enabled': cap_enabled,
-               'tax_rate_display': tax_rate_display
+               'tax_rate_display': tax_rate_display,
+               'payment_credits': payment_credits
                }
     return render_to_resp(request=request, template_name=template, context=context)
 
@@ -1903,6 +1905,10 @@ def corpmembership_export(request,
             corp_memb_field_list.remove('guid')
             corp_memb_field_list.remove('corp_profile')
             corp_memb_field_list.remove('anonymous_creator')
+            corp_memb_field_list.append('subtotal')
+            corp_memb_field_list.append('total')
+            corp_memb_field_list.append('tax')
+            corp_memb_field_list.append('balance')
 
             title_list = corp_profile_field_list + corp_memb_field_list
 

@@ -191,9 +191,19 @@ def corp_membership_rows(corp_profile_field_names,
                     item = item.id
             row_items.append(item)
         for field_name in corp_memb_field_names:
-            item = getattr(corp_membership, field_name)
-            if item and field_name in foreign_keys:
-                item = item.id
+            if field_name in ['subtotal', 'total', 'tax', 'balance']:
+                invoice = corp_membership.invoice
+                if invoice:
+                    if field_name == 'tax':
+                        item = invoice.tax + invoice.tax_2
+                    else:
+                        item = getattr(invoice, field_name)
+                else:
+                    item = ''
+            else:
+                item = getattr(corp_membership, field_name)
+                if item and field_name in foreign_keys:
+                    item = item.id
             row_items.append(item)
 
         yield row_items
@@ -344,6 +354,15 @@ def corp_memb_inv_add(user, corp_memb, app=None, **kwargs):
 
         inv.estimate = True
         inv.status_detail = 'estimate'
+        if renewal:
+            if get_setting('module', 'invoices', 'cancarryover'):
+                # check if they have payment credits that can be carried from their previous invoice
+                previous_invoice_id, previous_credits = corp_memb.get_previous_payment_credits()
+                if previous_credits:
+                    inv.payments_credits = previous_credits
+                    currency_symbol = get_setting('site', 'global', 'currencysymbol')
+                    inv.admin_notes = f'Payment credits {currency_symbol}{previous_credits} carried over from invoice <a href="/invoices/{previous_invoice_id}/">{previous_invoice_id}</a>.'
+                    inv.balance = inv.total - inv.payments_credits
         inv.save(user)
 
         if not corp_memb.payment_method:

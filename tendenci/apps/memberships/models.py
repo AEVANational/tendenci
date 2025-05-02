@@ -408,6 +408,10 @@ class MembershipSet(models.Model):
         invoice.subtotal = price
         invoice.total = price + invoice.tax + invoice.tax_2
         invoice.balance = invoice.total
+        
+        membership = memberships[0]
+        if membership.renewal:
+            membership.assign_payment_credits(invoice)
 
         invoice.due_date = datetime.now()
         invoice.ship_date = datetime.now()
@@ -1593,7 +1597,8 @@ class MembershipDefault(TendenciBaseModel):
             renew = {}
 
         if status == 'active':
-            actions.update(renew)
+            if self.can_renew():
+                actions.update(renew)
             actions.update({
                 # '?action=pend': u'Make Pending',
                 expire_link: u'Expire Membership'})
@@ -1608,10 +1613,31 @@ class MembershipDefault(TendenciBaseModel):
                 disapprove_link: u'Disapprove',
                 expire_link: u'Expire Membership'})
         elif status == 'expired':
+            actions.update(renew)
             actions.update({
                 approve_link: u'Approve Membership'})
 
         return actions
+
+    def get_previous_payment_credits(self):
+        if self.renewal and self.renew_from_id:
+            from_member = MembershipDefault.objects.filter(id=self.renew_from_id).first()
+            if from_member:
+                from_member_invoice = from_member.get_invoice()
+                if from_member_invoice and from_member_invoice.balance < 0:
+                    return from_member_invoice.id, from_member_invoice.balance * (-1)
+        return 0, 0
+
+    def assign_payment_credits(self, invoice):
+        if self.renewal:
+            if get_setting('module', 'invoices', 'cancarryover'):
+                # check if they have payment credits that can be carried from their previous invoice
+                previous_invoice_id, previous_credits = self.get_previous_payment_credits()
+                if previous_credits:
+                    invoice.payments_credits = previous_credits
+                    currency_symbol = get_setting('site', 'global', 'currencysymbol')
+                    invoice.admin_notes = f'Payment credits {currency_symbol}{previous_credits} carried over from invoice <a href="/invoices/{previous_invoice_id}/">{previous_invoice_id}</a>.'
+                    invoice.balance = invoice.total - invoice.payments_credits
 
     def get_invoice(self):
         """
@@ -1678,6 +1704,9 @@ class MembershipDefault(TendenciBaseModel):
             invoice.subtotal = price
             invoice.total = price + invoice.tax + invoice.tax_2
             invoice.balance = invoice.total
+
+            if self.renewal:
+                self.assign_payment_credits(invoice)
 
         invoice.due_date = invoice.due_date or datetime.now()
         invoice.ship_date = invoice.ship_date or datetime.now()
