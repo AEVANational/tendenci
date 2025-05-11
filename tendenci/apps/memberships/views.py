@@ -1170,9 +1170,12 @@ def membership_default_add(request, slug='', membership_id=None,
         if membership_renewed:
             inv = membership_renewed.get_invoice()
             if inv and inv.balance > 0:
-                return HttpResponseRedirect(reverse(
-                        'payment.pay_online',
-                        args=[inv.pk, inv.guid]))
+                # Check that this membership is paid online before launching online payment
+                # Additional check could be added to confirm that online payment configuration is in place
+                if membership.is_paid_online():
+                    return HttpResponseRedirect(reverse(
+                            'payment.pay_online',
+                            args=[inv.pk, inv.guid]))
             view_url = membership_renewed.get_absolute_url()
             if membership_renewed.status_detail == 'pending':
                 msg_string = _(f'Your membership renewal application is pending for admin approval. <a href="{view_url}">View Membership</a>')
@@ -1736,7 +1739,8 @@ def membership_default_edit(request, id, template='memberships/applications/add.
         app_fields,
         request.POST or None,
         request=request,
-        instance=user)
+        instance=user,
+        edit_mode=True)
 
     profile_form = ProfileForm(
         app_fields,
@@ -2632,6 +2636,7 @@ def report_renewed_members(request, template_name='reports/renewed_members.html'
         table_header = [
             'id',
             'member number',
+            'member type',
             'last name',
             'first name',
             'email',
@@ -2648,6 +2653,7 @@ def report_renewed_members(request, template_name='reports/renewed_members.html'
             table_data.append([
                 mem.id,
                 mem.member_number,
+                mem.membership_type.name,
                 mem.user.last_name,
                 mem.user.first_name,
                 mem.user.email,

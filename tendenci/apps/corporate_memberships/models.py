@@ -292,6 +292,16 @@ class CorpProfile(TendenciBaseModel):
     ud6 = models.TextField(blank=True, default='', null=True)
     ud7 = models.TextField(blank=True, default='', null=True)
     ud8 = models.TextField(blank=True, default='', null=True)
+    ud9 = models.TextField(blank=True, default='', null=True)
+    ud10 = models.TextField(blank=True, default='', null=True)
+    ud11 = models.TextField(blank=True, default='', null=True)
+    ud12 = models.TextField(blank=True, default='', null=True)
+    ud13 = models.TextField(blank=True, default='', null=True)
+    ud14 = models.TextField(blank=True, default='', null=True)
+    ud15 = models.TextField(blank=True, default='', null=True)
+    ud16 = models.TextField(blank=True, default='', null=True)
+    ud17 = models.TextField(blank=True, default='', null=True)
+    ud18 = models.TextField(blank=True, default='', null=True)
 
     perms = GenericRelation(ObjectPermission,
                                       object_id_field="object_id",
@@ -726,6 +736,14 @@ class CorpMembership(TendenciBaseModel):
         Returns admin change_form page.
         """
         return reverse('corpmembership.view', args=[self.pk])
+
+    def get_previous_payment_credits(self):
+        if self.renewal and self.renew_from_id:
+            from_corp_member = CorpMembership.objects.filter(id=self.renew_from_id).first()
+            if from_corp_member and from_corp_member.invoice:
+                if from_corp_member.invoice.balance < 0:
+                    return from_corp_member.invoice.id, from_corp_member.invoice.balance * (-1)
+        return 0, 0
 
     def donation_add(self, request_user):
         """
@@ -1302,6 +1320,9 @@ class CorpMembership(TendenciBaseModel):
                 self.owner_username = request_user.username
             self.save()
             
+            # archive old corp_memberships
+            self.archive_old()
+            
             # directory
             if self.corp_profile.directory:
                 directory = self.corp_profile.directory
@@ -1640,6 +1661,18 @@ class CorpMembership(TendenciBaseModel):
                                     status_detail='active'
                                     ).order_by('-expiration_dt')[:1] or [None]
             return latest_renewed
+
+        return None
+
+    def latest_renewed_in_pending(self):
+        """
+        Get the latest renewed corpMembership that is still in pending.
+        """
+        corp_profile = self.corp_profile
+        latest_corp_membership = corp_profile.corp_membership
+        if latest_corp_membership and latest_corp_membership.id != self.id:
+            if 'pending' in latest_corp_membership.status_detail:
+                return latest_corp_membership
 
         return None
 

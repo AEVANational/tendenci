@@ -468,17 +468,18 @@ class MembershipDefaultUploadForm(forms.ModelForm):
         self.fields['interactive'].initial = 1
         self.fields['interactive'].widget = forms.HiddenInput()
         self.fields['key'].initial = 'email/member_number/fn_ln_phone'
+        self.fields['upload_file'].validators = [FileValidator(allowed_extensions=('.csv',), allowed_mimetypes=('text/csv', 'text/plain'))]
 
     def clean_upload_file(self):
         key = self.cleaned_data['key']
         upload_file = self.cleaned_data['upload_file']
         if not key:
             raise forms.ValidationError(_('Please specify the key to identify duplicates'))
-
+        upload_file.seek(0)
         file_content = upload_file.read()
         encoding = chardet.detect(file_content)['encoding']
         file_content = file_content.decode(encoding)
-        upload_file.seek(0)
+        #upload_file.seek(0)
         header_line_index = file_content.find('\n')
         header_list = ((file_content[:header_line_index]
                             ).strip('\r')).split(',')
@@ -744,6 +745,7 @@ class UserForm(FormControlWidgetMixin, forms.ModelForm):
     def __init__(self, app_field_objs, *args, **kwargs):
         self.request = kwargs.pop('request')
         self.is_corp_rep = kwargs.pop('is_corp_rep', None)
+        self.edit_mode = kwargs.pop('edit_mode', False)
         super(UserForm, self).__init__(*args, **kwargs)
 
         del self.fields['groups']
@@ -909,7 +911,7 @@ class UserForm(FormControlWidgetMixin, forms.ModelForm):
                             # let them activate the account before applying for membership
                             raise forms.ValidationError(inactive_user_err_msg)
 
-        if not self.is_renewal:
+        if not self.is_renewal and not self.edit_mode:
             if self.request.user.is_authenticated:
                 # check if they have already submitted a membership
                 m = MembershipDefault.objects.filter(user__email__iexact=email,
