@@ -807,15 +807,18 @@ class RegConfPricing(OrderingBaseModel):
                 # user is a member
                 filter_or = {'allow_member': True}
 
+            if not user.is_anonymous and user.group_member.exists():
+                # get a list of groups for this user
+                groups_id_list = user.group_member.values_list('group__id', flat=True)
+                if groups_id_list:
+                    filter_or.update({'groups__in': groups_id_list})
+
         else:
             filter_or = {'allow_anonymous': True,
                         'allow_user': True,
-                        'allow_member': True}
-        if not user.is_anonymous and user.group_member.exists():
-            # get a list of groups for this user
-            groups_id_list = user.group_member.values_list('group__id', flat=True)
-            if groups_id_list:
-                filter_or.update({'groups__in': groups_id_list})
+                        'allow_member': True,
+                        'groups__isnull': False}
+        
 
         filter_and = {'start_dt__lt': now,
                       'end_dt__gt': now,
@@ -2734,8 +2737,10 @@ class Event(TendenciBaseModel):
 
     def __init__(self, *args, **kwargs):
         super(Event, self).__init__(*args, **kwargs)
-        self.private_slug = self.private_slug or Event.make_slug()
-        self._original_repeat_of = self.repeat_of
+        self.private_slug = self.private_slug or self.make_slug()
+        # Commenting it out - This line of code is causing an error on dumpdata:
+        # "RecursionError: maximum recursion depth exceeded while calling a Python object"
+        #self._original_repeat_of = self.repeat_of
 
     @property
     def title_with_event_code(self):
@@ -3478,16 +3483,18 @@ class Event(TendenciBaseModel):
         # Without this set, we would not identify the original as being the same
         # as a repeated event.
         
+        # Commenting it out - the _original_repeat_of assigment is causing
+        # error on the command dumpdata: "RecursionError: maximum recursion depth exceeded while calling a Python object" 
         # Check if repeat_of has been removed or switched to another sub event
-        if self.repeat_of != self._original_repeat_of:
-            if not self.repeat_of:
-                # 1) removed - re-assign a new unique uuid 
-                self.repeat_uuid = uuid.uuid4()
-            else:
-                # 2) switched to another event - find the new repeat_uuid
-                self.repeat_uuid = self.repeat_of.repeat_uuid or uuid.uuid4()
-        else:
-            self.repeat_uuid = self.repeat_uuid or uuid.uuid4()
+        # if self.repeat_of != self._original_repeat_of:
+        #     if not self.repeat_of:
+        #         # 1) removed - re-assign a new unique uuid 
+        #         self.repeat_uuid = uuid.uuid4()
+        #     else:
+        #         # 2) switched to another event - find the new repeat_uuid
+        #         self.repeat_uuid = self.repeat_of.repeat_uuid or uuid.uuid4()
+        # else:
+        self.repeat_uuid = self.repeat_uuid or uuid.uuid4()
 
         self.guid = self.guid or str(uuid.uuid4())
 
@@ -3977,7 +3984,7 @@ class Event(TendenciBaseModel):
 
         return total_registered - self.total_checked_in
 
-    @classmethod
+    #@classmethod
     def make_slug(self, length=7):
         """
         Returns newly generated slug
@@ -3995,7 +4002,7 @@ class Event(TendenciBaseModel):
             get_global_setting)
 
         pk = self.pk or 'id'
-        private_slug = self.private_slug or Event.make_slug()
+        private_slug = self.private_slug or self.make_slug()
 
         if absolute_url:
             return '%s/%s/%s/%s' % (

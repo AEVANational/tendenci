@@ -182,8 +182,10 @@ class CorporateMembershipType(OrderingBaseModel, TendenciBaseModel):
 
     def __init__(self, *args, **kwargs):
         super(CorporateMembershipType, self).__init__(*args, **kwargs)
-        self._original_pending_group = self.pending_group
-        self._original_active_group = self.active_group
+        #Commenting it out as it is causing an error on dumpdata:
+        # RecursionError: maximum recursion depth exceeded in comparison
+        # self._original_pending_group = self.pending_group
+        # self._original_active_group = self.active_group
 
     class Meta:
         verbose_name = _("Corporate Membership Type")
@@ -205,12 +207,12 @@ class CorporateMembershipType(OrderingBaseModel, TendenciBaseModel):
                 self.position = 1
 
         super(CorporateMembershipType, self).save(*args, **kwargs)
-        # Sync pending_group and active_group if needed
-        if (self.pending_group and self.pending_group != self._original_pending_group) or \
-            (self.active_group and self.active_group != self._original_active_group):
-            subprocess.Popen([python_executable(), "manage.py",
-                              "sync_corp_reps_groups", '--corp_mem_type_id',
-                              str(self.id)])
+        # # Sync pending_group and active_group if needed
+        # if (self.pending_group and self.pending_group != self._original_pending_group) or \
+        #     (self.active_group and self.active_group != self._original_active_group):
+        #     subprocess.Popen([python_executable(), "manage.py",
+        #                       "sync_corp_reps_groups", '--corp_mem_type_id',
+        #                       str(self.id)])
 
     def get_expiration_dt(self, renewal=False, join_dt=None, renew_dt=None, previous_expire_dt=None):
         """
@@ -292,6 +294,16 @@ class CorpProfile(TendenciBaseModel):
     ud6 = models.TextField(blank=True, default='', null=True)
     ud7 = models.TextField(blank=True, default='', null=True)
     ud8 = models.TextField(blank=True, default='', null=True)
+    ud9 = models.TextField(blank=True, default='', null=True)
+    ud10 = models.TextField(blank=True, default='', null=True)
+    ud11 = models.TextField(blank=True, default='', null=True)
+    ud12 = models.TextField(blank=True, default='', null=True)
+    ud13 = models.TextField(blank=True, default='', null=True)
+    ud14 = models.TextField(blank=True, default='', null=True)
+    ud15 = models.TextField(blank=True, default='', null=True)
+    ud16 = models.TextField(blank=True, default='', null=True)
+    ud17 = models.TextField(blank=True, default='', null=True)
+    ud18 = models.TextField(blank=True, default='', null=True)
 
     perms = GenericRelation(ObjectPermission,
                                       object_id_field="object_id",
