@@ -1,13 +1,17 @@
 from builtins import str
 import re
 import os
+import sys
 import pytz
 import codecs
 import phonenumbers
 from PIL import Image
 from dateutil.parser import parse
 from datetime import datetime, time
-from warnings import deprecated
+if sys.version_info >= (3, 13):
+    from warnings import deprecated
+else
+    from typing_extensions import deprecated
 
 from decimal import Decimal
 from django.template import Library
