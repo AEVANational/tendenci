@@ -10,7 +10,7 @@ from dateutil.parser import parse
 from datetime import datetime, time
 if sys.version_info >= (3, 13):
     from warnings import deprecated
-else
+else:
     from typing_extensions import deprecated
 
 from decimal import Decimal
