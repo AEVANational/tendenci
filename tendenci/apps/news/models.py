@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from django.utils import timezone
 from django.db import models
 from django.urls import reverse
 from tendenci.apps.user_groups.models import Group
@@ -37,7 +38,7 @@ class News(TendenciBaseModel):
 
     guid = models.CharField(max_length=40)
     slug = SlugField(_('URL Path'), unique=True)
-    timezone = TimeZoneField(verbose_name=_('Time Zone'), default='US/Central', choices=get_timezone_choices(), max_length=100)
+    timezone = TimeZoneField(verbose_name=_('Time Zone'), default=settings.TIME_ZONE, choices=get_timezone_choices(), max_length=100)
     headline = models.CharField(max_length=200, blank=True)
     summary = models.TextField(blank=True)
     body = tinymce_models.HTMLField()
@@ -151,7 +152,7 @@ class News(TendenciBaseModel):
     def is_released(self):
         if not self.release_dt_local:
             self.assign_release_dt_local()
-        return self.release_dt_local <= datetime.now()
+        return self.release_dt_local <= timezone.now()
 
     @property
     def has_google_author(self):

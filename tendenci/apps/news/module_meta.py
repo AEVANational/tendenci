@@ -1,4 +1,5 @@
 from django.utils.html import strip_tags
+from django.conf import settings
 from html import unescape
 from tendenci.apps.meta.utils import generate_meta_keywords
 from tendenci.apps.site_settings.utils import get_setting
