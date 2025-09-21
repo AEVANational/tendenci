@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from haystack import indexes
 
 from tendenci.apps.news.models import News
@@ -47,7 +47,7 @@ class NewsIndex(TendenciBaseSearchIndex, indexes.Indexable):
     def prepare_can_syndicate(self, obj):
         return obj.allow_anonymous_view and obj.syndicate \
                 and obj.status == 1 and obj.status_detail == 'active' \
-                and obj.release_dt <= datetime.now()
+                and obj.release_dt <= timezone.now()
 
     def prepare_groups(self, obj):
         return [group.pk for group in obj.groups.all()] or None

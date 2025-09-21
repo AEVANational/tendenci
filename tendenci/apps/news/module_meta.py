@@ -32,7 +32,8 @@ class NewsMeta():
         if obj.headline and obj.release_dt:
             values_list.append('-')
         if obj.release_dt:
-            values_list.append(obj.release_dt.strftime('%m-%d-%Y'))
+            # values_list.append(obj.release_dt.strftime('%m-%d-%Y'))
+            values_list.append(obj.release_dt.strftime(settings.SHORT_DATE_FORMAT))
 
         if primary_keywords:
             if values_list:
