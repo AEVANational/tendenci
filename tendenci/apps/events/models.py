@@ -806,9 +806,12 @@ class RegConfPricing(OrderingBaseModel):
                             }
             else:
                 # user is a member
-                filter_or = {'allow_anonymous': True,
-                             'allow_user': True,
-                             'allow_member': True}
+                if get_setting('module', 'events', 'hide_non_member_pricing'):
+                    filter_or = {'allow_member': True}
+                else:
+                    filter_or = {'allow_anonymous': True,
+                                 'allow_user': True,
+                                 'allow_member': True}
 
             if not user.is_anonymous and user.group_member.exists():
                 # get a list of groups for this user
@@ -1240,7 +1243,11 @@ class Registration(models.Model):
         else:
             balance = 0
         if self.reg_conf_price is None or self.reg_conf_price.payment_required is None:
-            payment_required = config.payment_required
+            registrant = self.registrant
+            if registrant and registrant.pricing:
+                payment_required = registrant.pricing.payment_required or config.payment_required
+            else:
+                payment_required = config.payment_required
         else:
             payment_required = self.reg_conf_price.payment_required
 
