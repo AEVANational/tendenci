@@ -1,12 +1,17 @@
 from builtins import str
 import re
 import os
+import sys
 import pytz
 import codecs
 import phonenumbers
 from PIL import Image
 from dateutil.parser import parse
 from datetime import datetime, time
+if sys.version_info >= (3, 13):
+    from warnings import deprecated
+else:
+    from typing_extensions import deprecated
 
 from decimal import Decimal
 from django.template import Library
@@ -43,6 +48,7 @@ def localize_date(value, to_tz=None):
         return ''
 localize_date.is_safe = True
 
+@deprecated('Use the Django SHORT_DATE_FORMAT or SHORT_DATETIME_FORMAT instead')
 @register.filter_function
 def date_short(value, arg=None):
     """Formats a date according to the given format."""
@@ -94,7 +100,7 @@ def date(value, arg=None):
     if not value:
         return u''
     if arg is None:
-        arg = settings.DATETIME_FORMAT if value.time() != time() else settings.DATE_FORMAT 
+        arg = settings.DATETIME_FORMAT if value.time() != time() else settings.DATE_FORMAT
     else:
         if arg == 'long':
             return date_long(value)
@@ -490,7 +496,7 @@ def phonenumber(value):
             number = '+{} {}'.format(number_object.country_code, number)
 
         return number
-        
+
 @register.filter
 def timezone_label(value):
     try:
