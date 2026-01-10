@@ -24,7 +24,7 @@ from django.template.loader import render_to_string
 from django.db.models.fields import AutoField
 from django.template.defaultfilters import slugify
 
-from tendenci.apps.base.utils import day_validate, is_blank, tcurrency
+from tendenci.apps.base.utils import day_validate, is_blank, tcurrency, is_positive_and_not_zerotype
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.perms.models import TendenciBaseModel
 from tendenci.apps.perms.utils import get_notice_recipients
@@ -374,7 +374,8 @@ class MembershipSet(models.Model):
     def memberships(self):
         return MembershipDefault.objects.filter(membership_set=self).order_by('create_dt')
 
-    def save_invoice(self, memberships, app=None, discount_code=None, discount_amount=None):
+    def save_invoice(self, memberships, app=None, discount_code=None, discount_amount=None,
+                    donation_amount=None, donation_apply_tax=False):
         invoice = Invoice()
         invoice.title = "Membership Invoice"
         invoice.estimate = True
@@ -399,6 +400,11 @@ class MembershipSet(models.Model):
                 invoice.discount_amount = discount_amount
                 price -= discount_amount
 
+        if is_positive_and_not_zerotype(donation_amount) and donation_apply_tax: 
+            # add the donation amount to the price so that 
+            # it can calculate the tax for donation as well
+            price += donation_amount
+
         default_tax_rate = 0
         if app and app.include_tax:
             default_tax_rate = app.tax_rate
@@ -407,8 +413,17 @@ class MembershipSet(models.Model):
                            module_tax_rate_use_regions=get_setting('module', 'memberships', 'taxrateuseregions'))
 
         invoice.subtotal = price
-        invoice.total = price + invoice.tax + invoice.tax_2
+        if get_setting('module', 'invoices', 'taxmodel') == 'Tax Added': #tax added
+            invoice.total = price + invoice.tax + invoice.tax_2
+        else: #tax included
+            invoice.total = price
         invoice.balance = invoice.total
+        if is_positive_and_not_zerotype(donation_amount) and not donation_apply_tax:
+            # Since tax is not applied to donation,
+            # donation_amount hasn't been added yet
+            invoice.subtotal += donation_amount
+            invoice.total += donation_amount
+            invoice.balance += donation_amount
         
         membership = memberships[0]
         if membership.renewal:

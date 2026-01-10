@@ -806,7 +806,12 @@ class RegConfPricing(OrderingBaseModel):
                             }
             else:
                 # user is a member
-                filter_or = {'allow_member': True}
+                if get_setting('module', 'events', 'hide_non_member_pricing'):
+                    filter_or = {'allow_member': True}
+                else:
+                    filter_or = {'allow_anonymous': True,
+                                 'allow_user': True,
+                                 'allow_member': True}
 
             if not user.is_anonymous and user.group_member.exists():
                 # get a list of groups for this user
@@ -1238,7 +1243,11 @@ class Registration(models.Model):
         else:
             balance = 0
         if self.reg_conf_price is None or self.reg_conf_price.payment_required is None:
-            payment_required = config.payment_required
+            registrant = self.registrant
+            if registrant and registrant.pricing:
+                payment_required = registrant.pricing.payment_required or config.payment_required
+            else:
+                payment_required = config.payment_required
         else:
             payment_required = self.reg_conf_price.payment_required
 
@@ -1370,7 +1379,10 @@ class Registration(models.Model):
         invoice.assign_tax(price_tax_rate_list, primary_registrant.user)
 
         invoice.subtotal = self.amount_paid
-        invoice.total = invoice.subtotal + invoice.tax + invoice.tax_2
+        if get_setting('module', 'invoices', 'taxmodel') == 'Tax Added': #tax added
+            invoice.total = invoice.subtotal + invoice.tax + invoice.tax_2
+        else:
+            invoice.total = invoice.subtotal
 
         if invoice.gratuity:
             invoice.total += invoice.subtotal * invoice.gratuity
@@ -1759,7 +1771,7 @@ class Registrant(models.Model):
 
             credits[date].append({
                 'event_code': event.event_code,
-                'title': event.title if len(event.title) <= 60 else event.short_name,
+                'title': event.short_name if event.short_name else event.title,
                 'credits': cpe_credits,
                 'irs_credits': irs_credits,
 
@@ -2023,7 +2035,7 @@ class Registrant(models.Model):
                 self.registration.save()
 
             # update the invoice if invoice is not tendered
-            if not self.invoice.is_tendered:
+            if self.invoice and not self.invoice.is_tendered:
                 self.invoice.total -= self.amount
                 self.invoice.subtotal -= self.amount
                 self.invoice.balance -= self.amount
