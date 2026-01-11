@@ -1759,7 +1759,7 @@ class Registrant(models.Model):
                 continue
             events_visited.append(event.id)
 
-            date = event.start_dt.date().strftime('%B %d, %Y')
+            date = event.start_dt.date().strftime(settings.DATE_FORMAT)
 
             cpe_credits = self.get_cpe_credits_by_event(event)
             irs_credits = self.get_irs_credits_by_event(event)
@@ -2636,7 +2636,7 @@ class RecurringEvent(models.Model):
             repeat_type = 'month(s)'
         elif self.repeat_type == self.RECUR_YEARLY:
             repeat_type = 'year(s)'
-        ends_on = self.ends_on.strftime("%b %d %Y")
+        ends_on = self.ends_on.strftime(settings.DATE_FORMAT)
         return _("Repeats every %(frequency)s %(repeat_type)s until %(ends_on)s" % {
                             'frequency': self.frequency,
                             'repeat_type': repeat_type,
@@ -3517,7 +3517,7 @@ class Event(TendenciBaseModel):
             set_s3_file_permission(self.image.file, public=self.is_public())
 
     def __str__(self):
-        return f'{self.title} ({self.start_dt.strftime("%m/%d/%Y")} - {self.end_dt.strftime("%m/%d/%Y")})'
+        return f'{self.title} ({self.start_dt.strftime(settings.SHORT_DATE_FORMAT)} - {self.end_dt.strftime(settings.SHORT_DATE_FORMAT)})'
 
     @property
     def can_edit_attendance_dates_admin(self):
@@ -3810,7 +3810,7 @@ class Event(TendenciBaseModel):
     @property
     def display_start_date(self):
         """Start date formatted for confirmation messages"""
-        return self.start_dt.strftime("%m/%d/%Y")
+        return self.start_dt.strftime(settings.SHORT_DATE_FORMAT)
 
     def date_range(self, start_date, end_date):
         for n in range((end_date - start_date).days):
@@ -3893,7 +3893,7 @@ class Event(TendenciBaseModel):
 
     @property
     def event_dates_display(self):
-        return ' - '.join([x.strftime('%b %d, %Y') for x in self.full_event_days])
+        return ' - '.join([x.strftime(settings.DATE_FORMAT) for x in self.full_event_days])
 
     def get_spots_status(self):
         """
