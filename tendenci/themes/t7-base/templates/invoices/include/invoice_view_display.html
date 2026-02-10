@@ -25,11 +25,14 @@
             {% else %}
 	            {% if invoice.bill_to %}
 	                 {{ invoice.bill_to }}<br>
+<<<<<<< Updated upstream
 	                 {% if obj_name == "Corporate Membership" %}
 	                 	{% if invoice.bill_to != invoice.bill_to_company %}
 	            		{{ invoice.bill_to_company }}<br>
 	            		{% endif %}
 	            	{% endif %}
+=======
+>>>>>>> Stashed changes
 	            {% else %}
 	                {% if invoice.bill_to_first_name or invoice.bill_to_last_name %}
 	                    {% if invoice.bill_to_first_name %} {{ invoice.bill_to_first_name }} {% endif %} {% if invoice.bill_to_last_name %}{{ invoice.bill_to_last_name }}<br> {% endif %}
@@ -40,7 +43,10 @@
 	            {% endif %}
 
             	{% if invoice.bill_to_address %} {{ invoice.bill_to_address }}<br>{% endif %}
+<<<<<<< Updated upstream
             	{% if invoice.bill_to_address2 %} {{ invoice.bill_to_address2 }}<br>{% endif %}
+=======
+>>>>>>> Stashed changes
             	{% if invoice.bill_to_city %}{{ invoice.bill_to_city}},{% endif %} {% if invoice.bill_to_state %}{{ invoice.bill_to_state }}{% endif %} {% if invoice.bill_to_zip_code %}{{ invoice.bill_to_zip_code }}{% endif %}
             {% endif %}
           </td>
@@ -84,7 +90,15 @@
         </tr>
       </table>
     </div>
+<<<<<<< Updated upstream
     
+=======
+    {% if MODULE_INVOICES_INVOICELOGO %}
+    <div class="invoice-meta-logo">
+      <img src="/files/{{ MODULE_INVOICES_INVOICELOGO }}/300x150/crop/90/" alt="{% trans 'invoice logo' %}" title="{% trans 'invoice logo' %}" />
+    </div>
+    {% endif %}
+>>>>>>> Stashed changes
 
     <div class="invoice-meta-clear"></div>
   </div>

@@ -1,4 +1,5 @@
 <div class="page-header">
+<<<<<<< Updated upstream
   <h1>{% if obj_name %}{% if obj_name == "Form entry" %}{{ obj.form }}{% else %}{{ obj_name|capfirst }}{% endif %}{% endif %} {% trans 'Invoice' %}</h1>
 </div>
 
@@ -22,3 +23,11 @@
 {% endif %}
 </tr>
 </table>
+=======
+  <h1>{% if obj_name %}{{ obj_name|capfirst }}{% endif %} {% trans 'Invoice' %}</h1>
+</div>
+
+{% if SITE_GLOBAL_SITEMAILINGADDRESS %}
+<p><address class="invoice-site-address">{{ SITE_GLOBAL_SITEMAILINGADDRESS }}</address></p>
+{% endif %}
+>>>>>>> Stashed changes
