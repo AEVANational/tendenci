@@ -1,6 +1,5 @@
 # NOTE: When updating the registration scheme be sure to check with the
 # anonymous registration impementation of events in the registration module.
-from builtins import str
 import ast
 import re
 import os.path
@@ -32,6 +31,7 @@ from django.utils import timezone as du_timezone
 
 from pytz import timezone
 from pytz import UnknownTimeZoneError
+from django.utils import timezone
 
 from tendenci.apps.events.models import (Event, Place, Speaker, Organizer, Sponsor,
     Registration, RegistrationConfiguration, Registrant, RegConfPricing,
@@ -190,8 +190,7 @@ def do_events_financial_export(**kwargs):
         events = events.filter(Q(start_dt__gte=start_dt) & Q(start_dt__lte=end_dt))
     if event_type:
         events = events.filter(type_id=event_type)
-    events = events.order_by('{0}{1}'.format(sort_direction, sort_by))
-
+    events = events.order_by('{}{}'.format(sort_direction, sort_by))
     show_discount_count = False
     for event in events:
         if event.discount_count > 0:
@@ -280,11 +279,11 @@ def render_event_email(event, email, registrants=None):
         if event.place.address:
             context['event_location']  += '%s<br />' % event.place.address
         if event.place.city or event.place.state or event.place.zip:
-            context['event_location']  += '%s %s %s' % (
+            context['event_location']  += '{} {} {}'.format(
                                             event.place.city,
                                             event.place.state,
                                             event.place.zip)
-    context['event_link'] = '<a href="%s">%s</a>' % (
+    context['event_link'] = '<a href="{}">{}</a>'.format(
                             reverse('event', args=[event.id]),
                             event.title
                                                      )
@@ -391,8 +390,10 @@ def render_registrant_excel(sheet, rows_list, balance_index, styles, start=0):
             # styles the date/time fields
             if isinstance(val, datetime):
                 style = styles['datetime_style']
+                val = val.replace(tzinfo=None)
             elif isinstance(val, date):
                 style = styles['date_style']
+                val = val.replace(tzinfo=None)
             else:
                 style = styles['default_style']
                 if isinstance(val, str):
@@ -468,7 +469,7 @@ def get_ievent(request, d, event_id):
     #     e_str += foldline("ORGANIZER:%s" % (', '.join(organizer_name_list)))
     #     e_str += "\r\n"
 
-    event_url = "%s%s" % (site_url, reverse('event', args=[event.pk]))
+    event_url = "{}{}".format(site_url, reverse('event', args=[event.pk]))
     d['event_url'] = event_url
     # text description
     e_str += foldline("DESCRIPTION:%s" % (build_ical_text(event,d)))
@@ -520,7 +521,7 @@ def get_vevents(user, d):
     e_str = ""
     # load both upcoming and ongoing events
     filters = get_query_filters(user, 'events.view_event')
-    events = Event.objects.filter(filters).filter(end_dt__gte=datetime.now())
+    events = Event.objects.filter(filters).filter(end_dt__gte=timezone.now())
     events = events.order_by('start_dt')
 
     dtstamp = datetime.now(datetime.timezone.utc).strftime(ICAL_DATE_TIME_FORMAT)
@@ -554,7 +555,7 @@ def get_vevents(user, d):
         # uid
         e_str += "UID:uid%d@%s\r\n" % (event.pk, d['domain_name'])
 
-        event_url = "%s%s" % (site_url, reverse('event', args=[event.pk]))
+        event_url = "{}{}".format(site_url, reverse('event', args=[event.pk]))
         d['event_url'] = event_url
 
         # text description
@@ -594,7 +595,7 @@ def build_ical_text(event, d):
     ical_text += "Event Title: %s\n" % strip_tags(event.title)
 
     # start_dt
-    ical_text += 'Start Date / Time: %s %s\n' % (event.start_dt.strftime(settings.DATETIME_FORMAT), event.timezone)
+    ical_text += 'Start Date / Time: {} {}\n'.format(event.start_dt.strftime(settings.DATETIME_FORMAT), event.timezone)
 
     # location
     if event.place:
@@ -704,7 +705,7 @@ def build_ical_html(event, d):
     ical_html += '<div>%s</div><br />' % d['event_url']
 
     # start_dt
-    ical_html += '<div>When: %s %s</div>' % (event.start_dt.strftime(settings.DATETIME_FORMAT), event.timezone)
+    ical_html += '<div>When: {} {}</div>'.format(event.start_dt.strftime(settings.DATETIME_FORMAT), event.timezone)
 
 #    # sponsor
 #    sponsors = event.sponsor_set.all()
@@ -730,7 +731,7 @@ def build_ical_html(event, d):
         ical_html += '%s<br />' % (event.place.name)
         ical_html += '%s<br />' % (event.place.address)
         if event.place.city and event.place.state:
-            ical_html += '%s, %s' % (event.place.city, event.place.state)
+            ical_html += '{}, {}'.format(event.place.city, event.place.state)
         if event.place.zip:
             ical_html += ' %s' % (event.place.zip)
         ical_html += '<br />'
@@ -864,7 +865,7 @@ def email_registrants(event, email, **kwargs):
             invoice = registrant.registration.get_invoice()
             if invoice:
                 invoicelink = invoice.get_absolute_url_with_guid()
-                invoicelink = '<a href="%s%s">%s%s</a>' % (site_url, invoicelink, site_url, invoicelink)
+                invoicelink = '<a href="{}{}">{}{}</a>'.format(site_url, invoicelink, site_url, invoicelink)
                 email.body = email.body.replace('[invoicelink]', invoicelink)
             else:
                 email.body = email.body.replace('[invoicelink]', '')
@@ -1338,7 +1339,7 @@ def gen_pricing_dict(price, qualifies, failure_type, admin=False):
     Generates a pricing dict based on the current date.
     Disregards time if user.profile.is_superuser is set to True.
     """
-    now = datetime.now()
+    now = timezone.now()
     if admin:
         pricing = {
             'price': price,
@@ -1548,7 +1549,7 @@ def registration_earliest_time(event, pricing=None):
             status=True,
         )
 
-    pricing = pricing.filter(end_dt__gt=datetime.now()).order_by('start_dt')
+    pricing = pricing.filter(end_dt__gt=timezone.now()).order_by('start_dt')
 
     try:
         return pricing[0].start_dt
@@ -2216,7 +2217,7 @@ def get_week_days(tgtdate, cal):
 
 
 def process_event_export(start_dt=None, end_dt=None, event_type=None,
-                         identifier=u'', user_id=0):
+                         identifier='', user_id=0):
     """
     This exports all events data and registration configuration.
     This export needs to be able to handle additional columns for each
@@ -2310,11 +2311,11 @@ def process_event_export(start_dt=None, end_dt=None, event_type=None,
     fields = event_fields + ["place %s" % f for f in place_fields]
     fields = fields + ["config %s" % f for f in configuration_fields]
     for i in range(0, max_speakers):
-        fields = fields + ["speaker %s %s" % (i, f) for f in speaker_fields]
+        fields = fields + ["speaker {} {}".format(i, f) for f in speaker_fields]
     for i in range(0, max_organizers):
-        fields = fields + ["organizer %s %s" % (i, f) for f in organizer_fields]
+        fields = fields + ["organizer {} {}".format(i, f) for f in organizer_fields]
     for i in range(0, max_pricings):
-        fields = fields + ["pricing %s %s" % (i, f) for f in pricing_fields]
+        fields = fields + ["pricing {} {}".format(i, f) for f in pricing_fields]
 
     identifier = identifier or int(ttime.time())
     file_name = 'export/events/%s.csv' % identifier

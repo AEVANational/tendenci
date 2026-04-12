@@ -13,6 +13,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db.models.signals import post_save
 from django.conf import settings
+from django.utils import timezone
 
 from tendenci.apps.notifications import models as notification
 from tendenci.apps.perms.utils import has_perm, get_notice_recipients
@@ -200,7 +201,7 @@ class Invoice(models.Model):
         This method populates all of the bill to fields
         via info in user and user.profile object.
         """
-        self.bill_to = '%s %s' % (user.first_name, user.last_name)
+        self.bill_to = '{} {}'.format(user.first_name, user.last_name)
         self.bill_to = self.bill_to.strip()
 
         self.bill_to_first_name = user.first_name
@@ -233,7 +234,7 @@ class Invoice(models.Model):
         This method populates all of the ship to fields
         via info in user and user.profile object.
         """
-        self.ship_to = '%s %s' % (user.first_name, user.last_name)
+        self.ship_to = '{} {}'.format(user.first_name, user.last_name)
         self.ship_to = self.ship_to.strip()
 
         self.ship_to_first_name = user.first_name
@@ -265,7 +266,7 @@ class Invoice(models.Model):
     def split_title(self):
         if ": " in self.title:
             split_title = ': '.join(self.title.split(': ')[1:])
-            return u'%s' % split_title
+            return '%s' % split_title
         return self.title
 
     def get_absolute_url(self):
@@ -300,7 +301,7 @@ class Invoice(models.Model):
             self.entity = self.get_entity()
 
         self.verifydata()
-        super(Invoice, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def verifydata(self):
         # verify each field
@@ -386,7 +387,7 @@ class Invoice(models.Model):
         Use status_detail and is_voide attribute
         """
         if self.is_void:
-            return u'void'
+            return 'void'
 
         return self.status_detail
 
@@ -409,7 +410,7 @@ class Invoice(models.Model):
             make_acct_entries(user, self, self.total)
             self.status_detail = 'tendered'
             self.status = 1
-            self.tender_date = datetime.now()
+            self.tender_date = timezone.now()
             self.save()
         return True
 
@@ -515,7 +516,7 @@ class Invoice(models.Model):
         """
         if not self.is_void:
             self.is_void = True
-            self.void_date = datetime.now()
+            self.void_date = timezone.now()
             self.voided_by = user
             # set balance to 0
             self.balance = 0

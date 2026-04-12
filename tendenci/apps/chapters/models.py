@@ -22,6 +22,7 @@ from django.utils.safestring import mark_safe
 from django.template import engines
 from django.core.files.storage import default_storage
 from importlib import import_module
+from django.utils import timezone
 
 from tendenci.libs.tinymce import models as tinymce_models
 from tendenci.apps.pages.models import BasePage
@@ -120,7 +121,7 @@ class Chapter(BasePage):
 
         photo_upload = kwargs.pop('photo', None)
 
-        super(Chapter, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         if photo_upload and self.pk:
             image = File(content_type=ContentType.objects.get_for_model(self.__class__),
                          object_id=self.pk,
@@ -273,7 +274,7 @@ class Chapter(BasePage):
 
 
 class Position(models.Model):
-    title = models.CharField(_(u'title'), max_length=200)
+    title = models.CharField(_('title'), max_length=200)
 
     class Meta:
         app_label = 'chapters'
@@ -325,7 +326,7 @@ class CoordinatingAgency(models.Model):
     def save(self, *args, **kwargs):
         if not self.entity:
             self.entity = Entity.objects.first()
-        super(CoordinatingAgency, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         if not self.group:
             self._auto_generate_group()
         self._populate_group()
@@ -466,7 +467,7 @@ class ChapterMembershipType(OrderingBaseModel, TendenciBaseModel):
         Save MembershipType instance.
         """
         self.guid = self.guid or uuid.uuid4().hex
-        super(ChapterMembershipType, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def get_price_display(self, renew_mode=False, chapter=None):
         price = self.price
@@ -500,7 +501,7 @@ class ChapterMembershipType(OrderingBaseModel, TendenciBaseModel):
                                                               renew_dt=chapter_membership.renew_dt,
                                                               previous_expire_dt=None)
         """
-        now = datetime.now()
+        now = timezone.now()
 
         if not join_dt or not isinstance(join_dt, datetime):
             join_dt = now
@@ -679,7 +680,7 @@ class ChapterMembership(TendenciBaseModel):
         return f"Chapter Membership {self.pk} for {self.user.get_full_name()} in chapter {self.chapter}"
 
     def save(self, *args, **kwargs):
-        super(ChapterMembership, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         # add this chapter member to the coordinating group
         coord_group = self.chapter.get_coordinating_agency_group()
         if coord_group and not coord_group.is_member(self.user):
@@ -805,7 +806,7 @@ class ChapterMembership(TendenciBaseModel):
 
         # assert that we're within the renewal period
         start_dt, end_dt = renewal_period
-        return (datetime.now() >= start_dt and datetime.now() <= end_dt)
+        return (timezone.now() >= start_dt and timezone.now() <= end_dt)
 
     def get_actions(self, user):
         """
@@ -890,8 +891,8 @@ class ChapterMembership(TendenciBaseModel):
                 invoice.total = price
             invoice.balance = invoice.total
     
-            invoice.due_date = datetime.now()
-            invoice.ship_date = datetime.now()
+            invoice.due_date = timezone.now()
+            invoice.ship_date = timezone.now()
     
             invoice.save()
             self.invoice = invoice
@@ -1062,7 +1063,7 @@ class ChapterMembership(TendenciBaseModel):
         if not all(good):
             return False
 
-        NOW = datetime.now()
+        NOW = timezone.now()
 
         self.status = True
         self.status_detail = 'active'
@@ -1157,7 +1158,7 @@ class ChapterMembership(TendenciBaseModel):
         if self.is_expired() or self.status_detail == 'archive':
             return False
 
-        NOW = datetime.now()
+        NOW = timezone.now()
 
         self.status = True
         self.status_detail = 'disapproved'
@@ -1236,7 +1237,7 @@ class ChapterMembership(TendenciBaseModel):
         """
         if self.status and self.status_detail.lower() in ('active', 'expired'):
             if self.expire_dt:
-                return self.expire_dt <= datetime.now() and \
+                return self.expire_dt <= timezone.now() and \
                     (not self.in_grace_period())
         return False
 
@@ -1293,8 +1294,8 @@ class ChapterMembership(TendenciBaseModel):
             return False
 
         return all([
-            self.expire_dt < datetime.now(),
-            expire_with_grace_period_dt > datetime.now(),
+            self.expire_dt < timezone.now(),
+            expire_with_grace_period_dt > timezone.now(),
             self.status_detail == "active"])
 
     def get_renewal_period_dt(self):
@@ -1412,7 +1413,7 @@ class ChapterMembershipApp(TendenciBaseModel):
     def save(self, *args, **kwargs):
         if not self.id:
             self.guid = str(uuid.uuid4())
-        super(ChapterMembershipApp, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def render_items(self, context):
         for field_name in ['name', 'description', 'confirmation_text']:
@@ -1558,8 +1559,8 @@ class ChapterMembershipAppField(OrderingBaseModel):
         fld = None
         field_type = 'CharField'
 
-        chapter_membership_fields = dict([(field.name, field)
-                        for field in ChapterMembership._meta.fields])
+        chapter_membership_fields = {field.name: field
+                        for field in ChapterMembership._meta.fields}
         if field_name in chapter_membership_fields:
             fld = chapter_membership_fields[field_name]
 
@@ -1730,7 +1731,7 @@ class Notice(models.Model):
 
     def save(self, *args, **kwargs):
         self.guid = self.guid or str(uuid.uuid4())
-        super(Notice, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def get_default_context(self, chapter_membership):
         """
@@ -1740,7 +1741,7 @@ class Notice(models.Model):
         site_contact_name = get_setting('site', 'global', 'sitecontactname')
         site_contact_email = get_setting('site', 'global', 'sitecontactemail')
         site_url = get_setting('site', 'global', 'siteurl')
-        now = datetime.now()
+        now = timezone.now()
         nowstr = time.strftime("%d-%b-%y %I:%M %p", now.timetuple())
         global_context = {'site_display_name': site_display_name,
                           'site_contact_name': site_contact_name,
@@ -1761,12 +1762,12 @@ class Notice(models.Model):
             payment_method_name = ''
 
         view_link = f'{site_url}{chapter_membership.get_absolute_url()}'
-        edit_link = '{0}{1}'.format(site_url, reverse('chapters.membership_edit',
+        edit_link = '{}{}'.format(site_url, reverse('chapters.membership_edit',
                                     args=[chapter_membership.id]))
-        renew_link = '{0}{1}'.format(site_url, reverse('chapters.membership_renew',
+        renew_link = '{}{}'.format(site_url, reverse('chapters.membership_renew',
                                     args=[chapter_membership.id]))
         if chapter_membership.invoice:
-            invoice_link = '{0}{1}'.format(site_url, reverse('invoice.view',
+            invoice_link = '{}{}'.format(site_url, reverse('invoice.view',
                                         args=[chapter_membership.invoice.id]))
             total_amount = chapter_membership.invoice.total
         else:
@@ -1880,7 +1881,7 @@ class Notice(models.Model):
         """
         self.chapter_memberships_processed = {}
         num_sent = 0
-        now = datetime.now()
+        now = timezone.now()
         if self.notice_time in ['before', 'after']:
             if self.notice_time == 'before':
                 start_dt = now + timedelta(days=self.num_days)
@@ -2114,7 +2115,7 @@ class ChapterMembershipImport(BaseImport):
         import csv
         if not self.recap_file and self.header_line:
             file_name = 'chapter_memberships_import_%d_recap.csv' % self.id
-            file_path = '%s/%s' % (os.path.split(self.upload_file.name)[0],
+            file_path = '{}/{}'.format(os.path.split(self.upload_file.name)[0],
                                    file_name)
             header_row = self.header_line.split(',')
             if 'status' in header_row:
