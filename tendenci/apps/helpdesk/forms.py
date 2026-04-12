@@ -27,7 +27,7 @@ from tendenci.apps.helpdesk.models import SavedSearch, Ticket, Queue, FollowUp, 
 from tendenci.apps.helpdesk import settings as helpdesk_settings
 from tendenci.apps.base.forms import CustomCatpchaField
 
-class CustomFieldMixin(object):
+class CustomFieldMixin:
     """
     Mixin that provides a method to turn CustomFields into an actual field
     """
@@ -79,7 +79,7 @@ class EditTicketForm(CustomFieldMixin, forms.ModelForm):
         """
         Add any custom fields that are defined to the form
         """
-        super(EditTicketForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         for field in CustomField.objects.all():
             try:
@@ -109,7 +109,30 @@ class EditTicketForm(CustomFieldMixin, forms.ModelForm):
                 cfv.value = value
                 cfv.save()
 
-        return super(EditTicketForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+
+class SavedSearchForm(forms.ModelForm):
+    query_encoded = forms.CharField()
+    
+    class Meta:
+        model = SavedSearch
+        fields = ('title', 'shared',)
+
+    def clean_query_encoded(self):
+        """Validate the json serialized query"""
+        query_encoded = self.cleaned_data['query_encoded']
+        try:
+            query_dict = simplejson.loads(b64decode(str(query_encoded).encode()))
+        except simplejson.errors.JSONDecodeError:
+            raise forms.ValidationError(_('Invalid query_encoded.'))
+        # validate the content of the query
+        valid_keys = ['filtering', 'sorting', 'sortreverse', 'keyword', 'other_filter', 'search_string']
+        for k in query_dict.keys():
+            if k not in valid_keys:
+                raise forms.ValidationError(_(f'{k} is not a valid parameter.'))
+        
+        return query_encoded
 
 
 class SavedSearchForm(forms.ModelForm):
@@ -138,7 +161,7 @@ class SavedSearchForm(forms.ModelForm):
 class EditFollowUpForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         "Filter not openned tickets here."
-        super(EditFollowUpForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields["ticket"].queryset = Ticket.objects.filter(status__in=(Ticket.OPEN_STATUS, Ticket.REOPENED_STATUS))
     class Meta:
         model = FollowUp
@@ -212,7 +235,7 @@ class TicketForm(CustomFieldMixin, forms.Form):
         """
         Add any custom fields that are defined to the form
         """
-        super(TicketForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field in CustomField.objects.all():
             instanceargs = {
                     'label': field.label,
@@ -396,7 +419,7 @@ class PublicTicketForm(CustomFieldMixin, forms.Form):
         """
         Add any custom fields that are defined to the form
         """
-        super(PublicTicketForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         for field in CustomField.objects.filter(staff_only=False):
             instanceargs = {
                     'label': field.label,
@@ -550,7 +573,7 @@ class EmailIgnoreForm(forms.ModelForm):
 
 class TicketCCForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
-        super(TicketCCForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if helpdesk_settings.HELPDESK_STAFF_ONLY_TICKET_CC:
             users = User.objects.filter(is_active=True, is_staff=True).order_by(User.USERNAME_FIELD)
         else:
