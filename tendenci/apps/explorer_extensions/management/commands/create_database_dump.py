@@ -1,8 +1,8 @@
-
 from django.core.management.base import BaseCommand, CommandError
 from django.template.loader import render_to_string
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.utils import timezone
 
 
 class Command(BaseCommand):
@@ -61,7 +61,7 @@ class Command(BaseCommand):
         fmt = options['export_format']
 
         if fmt not in VALID_FORMAT_CHOICES:
-            raise CommandError('Format %s is not supported. Please use one of the following: %s' % (fmt, VALID_FORMAT_CHOICES))
+            raise CommandError('Format {} is not supported. Please use one of the following: {}'.format(fmt, VALID_FORMAT_CHOICES))
 
         dump_obj.export_format = fmt
         dump_obj.save()
@@ -74,7 +74,7 @@ class Command(BaseCommand):
             call_command('dumpdata', format=fmt, stdout=f, exclude=['event_logs', 'sessions', 'handler404', 'notifications', 'captcha.captchastore', 'files.multiplefile', 'events.standardregform', 'help_files', 'explorer_extensions'])
 
         dump_obj.status = "completed"
-        dump_obj.end_dt = datetime.datetime.now() + datetime.timedelta(days=3)
+        dump_obj.end_dt = timezone.now() + datetime.timedelta(days=3)
         dump_obj.save()
 
         # File is created.

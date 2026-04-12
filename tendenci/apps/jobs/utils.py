@@ -2,6 +2,7 @@
 from datetime import datetime
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 
 from tendenci.apps.jobs.models import JobPricing
 from tendenci.apps.invoices.models import Invoice
@@ -67,8 +68,8 @@ def job_set_inv_payment(user, job, pricing):
             inv.ship_to_fax = job.contact_fax
             inv.ship_to_email =job.contact_email
             inv.terms = _("Due on Receipt")
-            inv.due_date = datetime.now()
-            inv.ship_date = datetime.now()
+            inv.due_date = timezone.now()
+            inv.ship_date = timezone.now()
             inv.message = _('Thank You.')
             inv.status = True
 
@@ -146,10 +147,10 @@ def pricing_choices(user):
 
     for pricing in pricings:
         if member:
-            prices = "%s/%s" % (pricing.regular_price_member, pricing.premium_price_member)
+            prices = "{}/{}".format(pricing.regular_price_member, pricing.premium_price_member)
         else:
-            prices = "%s/%s" % (pricing.regular_price, pricing.premium_price)
+            prices = "{}/{}".format(pricing.regular_price, pricing.premium_price)
 
-        label = "%s: %s Days for %s" % (pricing.get_title(), pricing.duration, prices)
+        label = "{}: {} Days for {}".format(pricing.get_title(), pricing.duration, prices)
         choices.append((pricing.pk, label))
     return choices

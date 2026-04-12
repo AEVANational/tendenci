@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from haystack import indexes
+from django.utils import timezone
 
 from tendenci.apps.news.models import News
 from tendenci.apps.categories.models import Category
