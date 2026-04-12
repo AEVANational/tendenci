@@ -1,3 +1,17 @@
+=======
+### 16.0 [2026-3-30]
+
+* **Breaking Changes: Requires Django 5.2 LTS**. Dropped the support for Django 4.2 LTS, which includes the backwards incompatible changes: Dropped support for Python 3.8 and 3.9. Dropped support for PostgreSQL 13. For migrating T15 sites to T16, please follow the guide in https://tendenci.readthedocs.io/en/latest/upgrade/upgrade-to-tendenci.html.
+* New feature: Event assets/files that can be accessed by attendees only.
+* Updated the format for chapter memberships search.
+* Committees are listed by alphabetically now.
+* Updated the events with Zoom meeting to join Zoom meeting with the user's full name instead of username (Thanks to @bje-).
+* Excluded soft-deleted companies from showing on corp reports.
+* Updated email invoice to populate dues_reps to the recipient field and email body for the corp invoices.
+* Fixed the issue about logo not showing on invoice PDF.
+* Other bugfixes.
+
+
 ### 15.3.12 [2026-1-18]
 
 * **SECURITY**: Fixed an UnpicklingError in helpdesk module, which also patches a security vulnerability that could potentially be exploited by a staff user with carefully crafted malicious data (Thanks to @nedlir for reporting the issue). The helpdesk module is not enabled by default, if you have it enabled, be sure to update tendenci for your site immediately. 

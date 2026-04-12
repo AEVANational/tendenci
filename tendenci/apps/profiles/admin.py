@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.admin import SimpleListFilter
 from django.http import StreamingHttpResponse
 from django.utils.safestring import mark_safe
+from django.utils import timezone
 
 from tendenci.apps.event_logs.models import EventLog
 from tendenci.apps.perms.admin import TendenciBaseModelAdmin
@@ -79,7 +80,7 @@ class ProfileAdmin(TendenciBaseModelAdmin):
     ordering = ('user__last_name', 'user__first_name')
 
     def get_object(self, request, object_id, from_field=None):
-        obj = super(ProfileAdmin, self).get_object(request, object_id, from_field=from_field)
+        obj = super().get_object(request, object_id, from_field=from_field)
         # Avoid language being accidentally set to the first option 'ar'
         # because en-us is not an option in the language dropdown
         if obj and obj.language == 'en-us':
@@ -122,7 +123,7 @@ class ProfileAdmin(TendenciBaseModelAdmin):
     get_last_login.short_description = _('Last Login')
 
     def get_user(self, obj):
-        name = "%s %s" % (obj.user.first_name, obj.user.last_name)
+        name = "{} {}".format(obj.user.first_name, obj.user.last_name)
         name = name.strip()
 
         return name or obj.user.username
@@ -155,7 +156,7 @@ class LastLoginFilter(SimpleListFilter):
         if value == 999:
             queryset = queryset.filter(last_login__isnull=True)
         else:
-            dt = datetime.now() - timedelta(days=365 * value)
+            dt = timezone.now() - timedelta(days=365 * value)
             queryset = queryset.filter(last_login__lt=dt)
 
             #print(queryset.query)
@@ -201,7 +202,7 @@ class MyUserAdmin(UserAdmin):
         return member_number
 
     def has_delete_permission(self, request, obj=None):
-        result = super(MyUserAdmin, self).has_delete_permission(request, obj=obj)
+        result = super().has_delete_permission(request, obj=obj)
 
         if obj:
             num_rps = obj.recurring_payments.filter(status=True, status_detail='active').count()
