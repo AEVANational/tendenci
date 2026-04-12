@@ -526,13 +526,14 @@ def chapter_memberships_search(request, chapter_id=0,
             EventLog.objects.log(description="chapter memberships export")
             import csv
             def iter_chapter_memberships(chapter_memberships, app_fields):
+                site_name = get_setting('site', 'global', 'sitedisplayname')
                 field_labels = [_('First Name'), _('Last Name'), _('Email'), _('Username')]
                 field_labels += [_('Phone'), _('Address'), _('County'), _('State'), _('Zip Code'),]
                 field_labels += [field.label for field in app_fields]
-                field_labels += [_('Membership Type')]
+                field_labels += [_('Chapter Membership Type')]
                 field_labels += [_('Chapter Dues/Balance')]
-                field_labels += [_('National Membership Type')]
-                field_labels += [_('National Dues/Balance')]
+                field_labels += [_(f'{site_name} Membership Type')]
+                field_labels += [_(f'{site_name} Dues/Balance')]
                 field_labels += [_('Create Date'), _('Join Date'), _('Renew Date'),
                                 _('Expire Date'), _('Status Detail')]
                 field_labels.insert(0, _('Chapter'))
@@ -1047,17 +1048,16 @@ def chapter_membership_renew(request, chapter_membership_id=0,
 
             # create an invoice
             chapter_membership.save_invoice()
+            chapter_membership.pend()
             if chapter_membership.approval_required():
                 # approval is required - set pending
-                chapter_membership.pend()
                 chapter_membership.save()
+            else:
+                # not require approval - approve it!
+                chapter_membership.approve(request_user=request.user)
 
             # send notification to user
             chapter_membership.send_email(notice_type='renewal')
-
-            if not chapter_membership.approval_required():
-                # not require approval - approve it!
-                chapter_membership.approve(request_user=request.user)
 
             # log an event
             EventLog.objects.log(instance=chapter_membership)

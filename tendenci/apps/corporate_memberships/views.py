@@ -416,6 +416,9 @@ def corpmembership_add(request, slug='',
             # calculate the expiration
             corp_membership.expiration_dt = corp_memb_type.get_expiration_dt(
                                         join_dt=corp_membership.join_dt)
+            corp_membership.corp_price = corp_memb_type.price
+            if corp_memb_type.above_cap_price:
+                corp_membership.above_cap_price = corp_memb_type.above_cap_price
 
             # add invoice
             inv = corp_memb_inv_add(request.user, corp_membership, app=app)
@@ -736,7 +739,7 @@ def corpprofile_view(request, id, template="corporate_memberships/profiles/view.
     memberships = MembershipDefault.objects.filter(
                         corp_profile_id=corp_profile.id
                         ).exclude(
-                        status_detail__in=('archive', 'pending'))
+                        status_detail__in=('archive', 'pending', 'expired'))
     members_count = memberships.count()
     members_first10 = memberships.order_by('user__first_name', 'user__last_name')[:10]
     all_records = corp_profile.corp_memberships.all().order_by('-create_dt')
@@ -1304,6 +1307,7 @@ def corp_renew(request, id,
                                     indiv_renewal_price * count_ind_within_cap + \
                                     corp_memb_type.above_cap_price * count_ind_above_cap
                 else:
+                    new_corp_membership.above_cap_price = corp_memb_type.above_cap_price
                     renewal_total = corp_renewal_price + \
                             indiv_renewal_price * count_members
 
@@ -2143,7 +2147,8 @@ def report_active_corp_members_by_type(request,
     template='corporate_memberships/reports/report_by_type.html'):
     corp_mems = CorpMembership.objects.filter(
                             status=True,
-                            status_detail='active')
+                            status_detail='active',
+                            corp_profile__status=True)
     form = ReportByTypeForm(request.GET)
     if form.is_valid():
         days = int(form.cleaned_data.get('days') or 0)
@@ -2236,7 +2241,8 @@ def report_active_corp_members_by_type(request,
 def report_corp_members_by_status(request,
     template='corporate_memberships/reports/report_by_status.html'):
     corp_mems = CorpMembership.objects.filter(
-                            status=True,).exclude(
+                            status=True,
+                            corp_profile__status=True).exclude(
                             status_detail='archive')
     form = ReportByStatusForm(request.GET)
     if form.is_valid():
@@ -2271,6 +2277,18 @@ def report_corp_members_by_status(request,
     else:
         order_by_field =  allowed_sort_fields[sort]
     corp_mems = corp_mems.order_by(order_by_field)
+
+    if not status_detail:
+        exclude_list = []
+        for corp_mem in corp_mems:
+            corp_profile = corp_mem.corp_profile
+            if corp_mem.status_detail == 'pending':
+                active_corp_membership = corp_profile.active_corp_membership
+                if active_corp_membership:
+                    exclude_list.append(corp_mem.id)
+    
+        if exclude_list:
+            corp_mems = corp_mems.exclude(id__in=exclude_list)
 
     EventLog.objects.log()
 
