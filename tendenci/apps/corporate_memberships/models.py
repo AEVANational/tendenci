@@ -3,7 +3,6 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from functools import partial, reduce
-from builtins import str
 import subprocess
 
 from django import forms
@@ -21,6 +20,7 @@ from django.db.models.signals import post_delete
 from django.template.defaultfilters import slugify
 from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
+from django.utils import timezone
 
 #from django.contrib.contenttypes.models import ContentType
 from tendenci.libs.tinymce import models as tinymce_models
@@ -51,6 +51,7 @@ from tendenci.apps.base.fields import DictField, CountrySelectField, StateSelect
 
 from tendenci.apps.notifications import models as notification
 from tendenci.apps.base.utils import send_email_notification, fieldify, get_salesforce_access, correct_filename
+from tendenci.apps.base.utils import generate_random_password
 from tendenci.apps.event_logs.models import EventLog
 from tendenci.apps.corporate_memberships.utils import (
                                             corp_memb_inv_add,
@@ -182,7 +183,7 @@ class CorporateMembershipType(OrderingBaseModel, TendenciBaseModel):
     objects = CorpMembershipTypeManager()
 
     def __init__(self, *args, **kwargs):
-        super(CorporateMembershipType, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         #Commenting it out as it is causing an error on dumpdata:
         # RecursionError: maximum recursion depth exceeded in comparison
         # self._original_pending_group = self.pending_group
@@ -207,7 +208,7 @@ class CorporateMembershipType(OrderingBaseModel, TendenciBaseModel):
             else:
                 self.position = 1
 
-        super(CorporateMembershipType, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         # # Sync pending_group and active_group if needed
         # if (self.pending_group and self.pending_group != self._original_pending_group) or \
         #     (self.active_group and self.active_group != self._original_active_group):
@@ -366,7 +367,7 @@ class CorpProfile(TendenciBaseModel):
                 if region and region != self.region:
                     self.region = region
 
-        super(CorpProfile, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return "%s" % (self.name)
@@ -379,26 +380,26 @@ class CorpProfile(TendenciBaseModel):
 
     def delete(self, *args, **kwargs):
         if len(self.name) + len(str(self.pk)) >= 250:
-            self.name = '%s-%s' % (self.name[:250-len(str(self.pk))], self.pk)
+            self.name = '{}-{}'.format(self.name[:250-len(str(self.pk))], self.pk)
         else:
-            self.name = '%s-%s' % (self.name, self.pk)
-        super(CorpProfile, self).delete(*args, **kwargs)
+            self.name = '{}-{}'.format(self.name, self.pk)
+        super().delete(*args, **kwargs)
 
     def assign_secret_code(self):
         if not self.secret_code:
-            # use the make_random_password in the User object
+            # use generate_random_password
             length = 6
             allowed_chars = 'abcdefghjkmnpqrstuvwxyzABCDEF' + \
                             'GHJKLMNPQRSTUVWXYZ23456789'
-            secret_code = User.objects.make_random_password(
-                                                length=length,
-                                                allowed_chars=allowed_chars)
+            secret_code = generate_random_password(
+                                        length=length,
+                                        allowed_chars=allowed_chars)
             # check if this one is unique
             corp_profiles = CorpProfile.objects.filter(
                                             secret_code=secret_code)
 
             while corp_profiles:
-                secret_code = User.objects.make_random_password(
+                secret_code = generate_random_password(
                                             length=length,
                                             allowed_chars=allowed_chars)
                 corp_profiles = CorpProfile.objects.filter(
@@ -524,7 +525,7 @@ class CorpProfile(TendenciBaseModel):
 
     def get_logo_url(self):
         if not self.logo:
-            return u''
+            return ''
 
         return reverse('file', args=[self.logo.pk])
 
@@ -740,21 +741,13 @@ class CorpMembership(TendenciBaseModel):
 
     class Meta:
 #         permissions = (("view_corpmembership", "Can view corporate membership"),)
-        if get_setting('module', 'corporate_memberships', 'label'):
-            verbose_name = get_setting('module',
-                                       'corporate_memberships',
-                                       'label')
-            verbose_name_plural = get_setting('module',
-                                              'corporate_memberships',
-                                              'label_plural')
-        else:
-            verbose_name = _("Corporate Membership")
-            verbose_name_plural = _("Corporate Memberships")
+        verbose_name = _("Corporate Membership")
+        verbose_name_plural = _("Corporate Memberships")
         permissions = (("approve_corpmembership", _("Can approve corporate memberships")),)
         app_label = 'corporate_memberships'
 
     def __init__(self, *args, **kwargs):
-        super(CorpMembership, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._original_status_detail = self.status_detail
         self._original_expiration_dt = self.expiration_dt
 
@@ -828,7 +821,7 @@ class CorpMembership(TendenciBaseModel):
         if not self.entity:
             self.entity = self.corp_profile.entity
         self.allow_anonymous_view = False
-        super(CorpMembership, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         if self._original_status_detail != self.status_detail:
             self.corp_profile.sync_type_reps_groups()
 
@@ -1149,7 +1142,7 @@ class CorpMembership(TendenciBaseModel):
             self.status_detail == 'active' and \
             self.approved:
             self.status_detail = 'expired'
-            self.expiration_dt = datetime.now()
+            self.expiration_dt = timezone.now()
             self.save()
 
             memberships = MembershipDefault.objects.filter(
@@ -1176,7 +1169,7 @@ class CorpMembership(TendenciBaseModel):
                 group = self.corporate_membership_type.membership_type.group
                 membership = MembershipDefault()
                 membership.user = creator
-                membership.join_dt = datetime.now()
+                membership.join_dt = timezone.now()
                 membership.expire_dt = self.expiration_dt
                 membership.corporate_membership_id = self.id
                 membership.corp_profile_id = self.corp_profile.id
@@ -1228,7 +1221,7 @@ class CorpMembership(TendenciBaseModel):
 
     def approve_join(self, request, **kwargs):
         self.approved = True
-        self.approved_denied_dt = datetime.now()
+        self.approved_denied_dt = timezone.now()
         if not request.user.is_anonymous:
             self.approved_denied_user = request.user
         self.status = True
@@ -1261,7 +1254,7 @@ class CorpMembership(TendenciBaseModel):
                                      ).exists():
     
                 if self.anonymous_creator:
-                    login_url = '%s%s' % (
+                    login_url = '{}{}'.format(
                             get_setting('site', 'global', 'siteurl'),
                             reverse('auth_login'))
                     login_info = \
@@ -1299,11 +1292,11 @@ class CorpMembership(TendenciBaseModel):
 
     def disapprove_join(self, request, **kwargs):
         self.approved = False
-        self.approved_denied_dt = datetime.now()
+        self.approved_denied_dt = timezone.now()
         self.approved_denied_user = request.user
         self.status = True
         self.status_detail = 'inactive'
-        self.admin_notes = 'Disapproved by %s on %s. %s' % (
+        self.admin_notes = 'Disapproved by {} on {}. {}'.format(
                                     request.user,
                                     self.approved_denied_dt,
                                     self.admin_notes
@@ -1338,7 +1331,7 @@ class CorpMembership(TendenciBaseModel):
             request_user = request.user
             # 2) approve corp_membership
             self.approved = True
-            self.approved_denied_dt = datetime.now()
+            self.approved_denied_dt = timezone.now()
             if request_user and (not request_user.is_anonymous):
                 self.approved_denied_user = request_user
             self.status = True
@@ -1454,7 +1447,7 @@ class CorpMembership(TendenciBaseModel):
                         'pending', 'paid - pending approval']:
             request_user = request.user
             self.approved = True
-            self.approved_denied_dt = datetime.now()
+            self.approved_denied_dt = timezone.now()
             self.status_detail = 'inactive'
             if not request_user.is_anonymous:
                 self.owner = request_user
@@ -1495,7 +1488,7 @@ class CorpMembership(TendenciBaseModel):
                     create_new = True
             if create_new:
                 params.update({
-                   'password': User.objects.make_random_password(length=8),
+                   'password': generate_random_password(length=8),
                    'is_active': True})
                 assign_to_user = User(**params)
                 assign_to_user.username = get_unique_username(assign_to_user)
@@ -1629,14 +1622,14 @@ class CorpMembership(TendenciBaseModel):
         (renewal_period_start_dt,
          renewal_period_end_dt) = self.get_renewal_period_dt()
 
-        now = datetime.now()
+        now = timezone.now()
         return (now >= renewal_period_start_dt and now <= renewal_period_end_dt)
 
     def renew(self, request):
         new_corp_membership = self.copy()
         new_corp_membership.renewal = True
         new_corp_membership.renew_from_id = self.id
-        new_corp_membership.renew_dt = datetime.now()
+        new_corp_membership.renew_dt = timezone.now()
         new_corp_membership.status = True
         new_corp_membership.status_detail = 'pending'
         new_corp_membership.creator = request.user
@@ -1765,7 +1758,7 @@ class CorpMembership(TendenciBaseModel):
             if not self.expiration_dt or not isinstance(self.expiration_dt,
                                                         datetime):
                 return False
-            return datetime.now() >= self.expiration_dt
+            return timezone.now() >= self.expiration_dt
         return False
 
     @property
@@ -1804,7 +1797,7 @@ class CorpMembership(TendenciBaseModel):
             grace_period_end_dt = self.expiration_dt + timedelta(
                 days=self.corporate_membership_type.membership_type.expiration_grace_period)
 
-            return datetime.now() < grace_period_end_dt
+            return timezone.now() < grace_period_end_dt
         return False
 
     @property
@@ -1882,7 +1875,7 @@ class CorpMembership(TendenciBaseModel):
                          'site_url': get_setting('site', 'global', 'siteurl'),
                          'site_display_name': get_setting('site', 'global', 'sitedisplayname'),
                          'view_link': self.get_absolute_url(),
-                         'roster_link': "%s?cm_id=%s" % (reverse('corpmembership.roster_search'), self.id),
+                         'roster_link': "{}?cm_id={}".format(reverse('corpmembership.roster_search'), self.id),
                          'upgrade_link': reverse('corpmembership.upgrade', args=[self.id])}
         membership_recipients = get_setting('module', 'memberships', 'membershiprecipients')
 
@@ -2013,7 +2006,7 @@ class CorpMembershipApp(TendenciBaseModel):
     def save(self, *args, **kwargs):
         if not self.id:
             self.guid = str(uuid.uuid4())
-        super(CorpMembershipApp, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
         if not self.memb_app.use_for_corp:
             self.memb_app.use_for_corp = True
@@ -2028,7 +2021,7 @@ class CorpMembershipApp(TendenciBaseModel):
     @mark_safe
     def application_form_link(self):
         if self.is_current():
-            return '<a href="%s">%s</a>' % (reverse('corpmembership.add'),
+            return '<a href="{}">{}</a>'.format(reverse('corpmembership.add'),
                                             self.slug)
         return '--'
 
@@ -2156,12 +2149,12 @@ class CorpMembershipAppField(OrderingBaseModel):
 
     def __str__(self):
         if self.field_name:
-            return '%s (field name: %s)' % (self.label, self.field_name)
+            return '{} (field name: {})'.format(self.label, self.field_name)
         return '%s' % self.label
 
     @mark_safe
     def app_link(self):
-        return '<a href="%s">%s</a>' % (
+        return '<a href="{}">{}</a>'.format(
                 reverse('admin:corporate_memberships_corpmembershipapp_change',
                         args=[self.corp_app.id]),
                 self.corp_app.id)
@@ -2240,17 +2233,17 @@ class CorpMembershipAppField(OrderingBaseModel):
         """
         available_field_types = [choice[0] for choice in
                                 FIELD_CHOICES]
-        corp_profile_fields = dict([(field.name, field)
+        corp_profile_fields = {field.name: field
                         for field in CorpProfile._meta.fields
-                        if field.get_internal_type() != 'AutoField'])
+                        if field.get_internal_type() != 'AutoField'}
         fld = None
         field_type = 'CharField'
 
         if field_name in corp_profile_fields:
             fld = corp_profile_fields[field_name]
         if not fld:
-            corp_memb_fields = dict([(field.name, field)
-                            for field in CorpMembership._meta.fields])
+            corp_memb_fields = {field.name: field
+                            for field in CorpMembership._meta.fields}
 
             if field_name in corp_memb_fields:
                 fld = corp_memb_fields[field_name]
@@ -2294,15 +2287,15 @@ class CorpMembershipRep(models.Model):
         app_label = 'corporate_memberships'
 
     def __str__(self):
-        return 'Rep: %s for "%s"' % (self.user, self.corp_profile.name)
+        return 'Rep: {} for "{}"'.format(self.user, self.corp_profile.name)
 
     def save(self, *args, **kwargs):
-        super(CorpMembershipRep, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
         self.sync_reps_groups()
         self.corp_profile.sync_type_reps_groups(reps_list=[self.user.id])
 
     def delete(self, *args, **kwargs):
-        super(CorpMembershipRep, self).delete(*args, **kwargs)
+        super().delete(*args, **kwargs)
         self.remove_from_reps_groups()
         self.corp_profile.sync_type_reps_groups(reps_list=[self.user.id], remove=True)
 
@@ -2361,7 +2354,7 @@ class IndivEmailVerification(models.Model):
     def save(self, *args, **kwargs):
         if not self.id:
             self.guid = str(uuid.uuid4())
-        super(IndivEmailVerification, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
 
 class IndivMembershipRenewEntry(models.Model):
@@ -2562,7 +2555,7 @@ class Notice(models.Model):
             'site_contact_email': global_setting('sitecontactemail'),
             'site_display_name': global_setting('sitedisplayname'),
             'time_submitted': time.strftime("%d-%b-%y %I:%M %p",
-                                            datetime.now().timetuple()),
+                                            timezone.now().timetuple()),
         })
 
         # return basic context
@@ -2605,9 +2598,9 @@ class Notice(models.Model):
             invoice_link = ''
             
         if corporate_membership.corp_profile.directory:
-            directory_url = '{0}{1}'.format(site_url, reverse('directory',
+            directory_url = '{}{}'.format(site_url, reverse('directory',
                                     args=[corporate_membership.corp_profile.directory.slug]))
-            directory_edit_url = '{0}{1}'.format(site_url, reverse('directory.edit',
+            directory_edit_url = '{}{}'.format(site_url, reverse('directory.edit',
                                     args=[corporate_membership.corp_profile.directory.id]))
         else:
             directory_url = ''
@@ -2641,14 +2634,14 @@ class Notice(models.Model):
             'total_individuals_renewed': total_individuals_renewed,
             'name': corporate_membership.corp_profile.name,
             'email': corporate_membership.corp_profile.email,
-            'view_link': "%s%s" % (site_url,
+            'view_link': "{}{}".format(site_url,
                                    corporate_membership.get_absolute_url()),
-            'renew_link': "%s%s" % (site_url,
+            'renew_link': "{}{}".format(site_url,
                                     corporate_membership.get_renewal_url()),
             'invoice_link': invoice_link,
             'directory_url': directory_url,
             'directory_edit_url': directory_edit_url,
-            'individuals_join_url': '%s%s' % (site_url,
+            'individuals_join_url': '{}{}'.format(site_url,
                                 reverse('membership_default.corp_pre_add',
                                         args=[corporate_membership.id])),
             'authentication_info': authentication_info,
@@ -2664,7 +2657,7 @@ class Notice(models.Model):
         """
         context = self.get_default_context(corporate_membership, recipient)
         # autoescape off for subject to avoid HTML escaping
-        self.subject = '%s%s%s' % (
+        self.subject = '{}{}{}'.format(
                         "{% autoescape off %}",
                         self.subject,
                         "{% endautoescape %}")
@@ -2809,7 +2802,7 @@ class Notice(models.Model):
 
     def save(self, *args, **kwargs):
         self.guid = self.guid or str(uuid.uuid4())
-        super(Notice, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
 
 class NoticeLog(models.Model):
@@ -2859,7 +2852,7 @@ class BroadcastEmail(models.Model):
     def save(self, *args, **kwargs):
         if not self.id:
             self.guid = str(uuid.uuid4())
-        super(BroadcastEmail, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
 
 def delete_corp_profile(sender, **kwargs):

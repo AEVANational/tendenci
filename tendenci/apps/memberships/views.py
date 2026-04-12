@@ -36,6 +36,7 @@ from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
 from django.urls.resolvers import NoReverseMatch
+from django.utils import timezone
 
 #from geraldo.generators import PDFGenerator
 
@@ -82,7 +83,7 @@ from tendenci.apps.regions.models import Region
 from tendenci.apps.base.forms import CaptchaForm
 from tendenci.apps.perms.decorators import is_enabled
 from tendenci.apps.theme.utils import get_template_content_raw
-from tendenci.apps.base.utils import get_next_url
+from tendenci.apps.base.utils import get_next_url, generate_random_password
 
 
 @login_required
@@ -412,8 +413,8 @@ def message_pending_members(request, email_id=None, form_class=MessageForm, temp
                 [membership] = request.user.membershipdefault_set.exclude(status_detail='archive')[:1] or [0]
                 if membership:
                     site_url = get_setting('site', 'global', 'siteurl')
-                    context.update({'view_url': '{0}{1}'.format(site_url, reverse('membership.details', args=[membership.id])),
-                                    'edit_url': '{0}{1}'.format(site_url, reverse('membership_default.edit', args=[membership.id]))})
+                    context.update({'view_url': '{}{}'.format(site_url, reverse('membership.details', args=[membership.id])),
+                                    'edit_url': '{}{}'.format(site_url, reverse('membership_default.edit', args=[membership.id]))})
                 email.body = template.render(context)
                 email.send()
                 email.body = tmp_body
@@ -1021,7 +1022,7 @@ def membership_default_export_download(request, identifier):
         if not (corp_profile and corp_profile.is_rep(request.user)):
             raise Http403
 
-    file_name = '%s_%s.csv' % (identifier, cp_id)
+    file_name = '{}_{}.csv'.format(identifier, cp_id)
     file_path = 'export/memberships/%s' % file_name
     if not default_storage.exists(file_path):
         raise Http404
@@ -1114,7 +1115,7 @@ def membership_default_add_legacy(request):
     if username:
         [u] = User.objects.filter(username=username)[:1] or [None]
         if u:
-            redirect_url = '%s?username=%s' % (redirect_url, u.username)
+            redirect_url = '{}?username={}'.format(redirect_url, u.username)
     return redirect(redirect_url)
 
 
@@ -1185,7 +1186,7 @@ def membership_default_add(request, slug='', membership_id=None,
             messages.add_message(request, messages.INFO, msg_string)
             return HttpResponseRedirect(reverse('profile', args=[membership_renewed.user.username]))
 
-    membership_type_id = request.GET.get('membership_type_id', u'')
+    membership_type_id = request.GET.get('membership_type_id', '')
     if membership_type_id.isdigit():
         membership_type_id = int(membership_type_id)
     else:
@@ -1210,7 +1211,7 @@ def membership_default_add(request, slug='', membership_id=None,
 
             if username:
                 return HttpResponseRedirect(
-                    '%s?username=%s' % (redirect_url, u.username))
+                    '{}?username={}'.format(redirect_url, u.username))
             return redirect(redirect_url)
 
         # check if they have verified their email or entered the secret code
@@ -1323,7 +1324,7 @@ def membership_default_add(request, slug='', membership_id=None,
 
             if username and u:
                 return HttpResponseRedirect(
-                    '%s?username=%s' % (redirect_url, url_quote(u.username)))
+                    '{}?username={}'.format(redirect_url, url_quote(u.username)))
             return redirect(redirect_url)
 
     if not (request.user.is_superuser or (join_under_corporate and is_corp_rep)):
@@ -2006,12 +2007,12 @@ def membership_default_corp_pre_add(request, cm_id=None,
                                                 indiv_veri.guid]))
                 if form.auth_method == 'secret_code':
                     # secret code hash
-                    random_string = User.objects.make_random_password(
+                    random_string = generate_random_password(
                                     length=4,
                                     allowed_chars='abcdefghjkmnpqrstuvwxyz')
                     request.session['corp_hash_random_string'] = random_string
                     secret_code = form.cleaned_data['secret_code']
-                    secret_hash = md5(('%s%s' % (secret_code, random_string)).encode()).hexdigest()
+                    secret_hash = md5(('{}{}'.format(secret_code, random_string)).encode()).hexdigest()
                     return redirect(reverse('membership.add_via_corp_secret_code',
                                             args=[
                                                 corporate_membership_id,
@@ -2022,7 +2023,7 @@ def membership_default_corp_pre_add(request, cm_id=None,
             redirect_url = reverse('membership_default.add_under_corp', args=[corporate_membership_id])
 
             if u:
-                return HttpResponseRedirect('%s?username=%s' % (redirect_url, u.username))
+                return HttpResponseRedirect('{}?username={}'.format(redirect_url, u.username))
             return redirect(redirect_url)
 
     c = {'app': app, "form": form}
@@ -2125,26 +2126,26 @@ def expire(request, id, template_name="memberships/applications/expire.html"):
 
 @staff_member_required
 def membership_join_report(request):
-    TODAY = date.today()
+    TODAY = timezone.datetime.today()
     memberships = MembershipDefault.objects.filter(status=True,
                                                    status_detail__in=["active", 'archive'])
-    membership_type = u''
-    membership_status = u''
-    start_date = u''
-    end_date = u''
+    membership_type = ''
+    membership_status = ''
+    start_date = ''
+    end_date = ''
 
-    start_date = TODAY - relativedelta(months=1)
-    end_date = TODAY
+    start_date = timezone.make_aware(TODAY - relativedelta(months=1))
+    end_date = timezone.make_aware(TODAY)
 
     if request.method == 'POST':
         form = ReportForm(request.POST)
 
         if form.is_valid():
 
-            membership_type = form.cleaned_data.get('membership_type', u'')
-            membership_status = form.cleaned_data.get('membership_status', u'')
-            start_date = form.cleaned_data.get('start_date', u'')
-            end_date = form.cleaned_data.get('end_date', u'')
+            membership_type = form.cleaned_data.get('membership_type', '')
+            membership_status = form.cleaned_data.get('membership_status', '')
+            start_date = form.cleaned_data.get('start_date', '')
+            end_date = form.cleaned_data.get('end_date', '')
 
             if membership_type:
                 memberships = memberships.filter(membership_type=membership_type)
@@ -2156,7 +2157,7 @@ def membership_join_report(request):
             'start_date': start_date.strftime('%m/%d/%Y'),
             'end_date': end_date.strftime('%m/%d/%Y')})
 
-    end_date_time = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59)
+    end_date_time = timezone.make_aware(datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59))
     memberships = memberships.filter(application_approved_dt__gte=start_date,
                                      application_approved_dt__lt=end_date_time)
     memberships = memberships.filter(renewal=False).distinct('user__id', 'membership_type__id')
@@ -2447,9 +2448,9 @@ def report_expired_members(request, template_name='reports/membership_list.html'
         table_data = []
         for mem in mems:
 
-            invoice_pk = u''
+            invoice_pk = ''
             if mem.get_invoice():
-                invoice_pk = u'%i' % mem.get_invoice().pk
+                invoice_pk = '%i' % mem.get_invoice().pk
 
             table_data.append([
                 mem.user.username,
@@ -2761,7 +2762,8 @@ def report_active_members_ytd(request, template_name='reports/active_members_ytd
     for index, month in enumerate(itermonths):
         index = index + 1
         start_dt = datetime(year_selected, index, 1)
-        end_dt = start_dt + relativedelta(months=1)
+        end_dt = timezone.make_aware(start_dt + relativedelta(months=1))
+        start_dt = timezone.make_aware(start_dt)
         members = active_mems.filter(application_approved_dt__gte=start_dt,
                                       application_approved_dt__lt=end_dt)
         new_mems = members.filter(renewal=False).distinct('user__id',

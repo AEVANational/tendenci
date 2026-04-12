@@ -1,4 +1,3 @@
-
 import bleach
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -13,6 +12,7 @@ from django.utils.timezone import now as tznow
 from django.contrib.contenttypes.fields import GenericRelation
 from django.db.models import OneToOneField
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 from tendenci.apps.perms.object_perms import ObjectPermission
 from tendenci.apps.perms.models import TendenciBaseModel
@@ -36,7 +36,7 @@ class Category(TendenciBaseModel):
                             object_id_field="object_id",
                             content_type_field="content_type")
 
-    class Meta(object):
+    class Meta:
 #         permissions = (("view_category", _("Can view forum category")),)
         ordering = ['position']
         verbose_name = _('Category')
@@ -78,7 +78,7 @@ class Forum(models.Model):
     headline = models.TextField(_('Headline'), blank=True, null=True)
     slug = models.SlugField(verbose_name=_("Slug"), max_length=255)
 
-    class Meta(object):
+    class Meta:
         ordering = ['position']
         verbose_name = _('Forum')
         verbose_name_plural = _('Forums')
@@ -171,7 +171,7 @@ class Forum(models.Model):
             print('No users subscribed digest for forum ', self)
             return
 
-        now = datetime.now()
+        now = timezone.now()
         to_dt = now - timedelta(days=1)
         #to_dt = now
         to_dt = datetime(to_dt.year, to_dt.month, to_dt.day, 23, 59, 59)
@@ -228,25 +228,25 @@ class ForumSubscription(models.Model):
                               on_delete=models.CASCADE)
     type = models.PositiveSmallIntegerField(
         _('Subscription type'), choices=TYPE_CHOICES,
-        help_text=_((
+        help_text=_(
             'The auto-subscription works like you manually subscribed to watch each topic :\n'
             'you will be notified when a topic will receive an answer. \n'
             'If you choose to be notified only when a new topic is added. It means'
             'you will be notified only once when the topic is created : '
             'you won\'t be notified for the answers.'
-        )), )
+        ), )
     digest_type = models.CharField(max_length=6,
                                    default='',
                                    choices=DIGEST_TYPE_CHOICES)
 
-    class Meta(object):
+    class Meta:
         verbose_name = _('Subscription to forum')
         verbose_name_plural = _('Subscriptions to forums')
         unique_together = ('user', 'forum',)
 
     def __str__(self):
-        return '%(user)s\'s subscription to "%(forum)s"' % {'user': self.user, 
-                                                            'forum': self.forum}
+        return '{user}\'s subscription to "{forum}"'.format(user=self.user, 
+                                                            forum=self.forum)
 
     def save(self, all_topics=False):
         if all_topics and self.type == self.TYPE_SUBSCRIBE:
@@ -254,13 +254,13 @@ class ForumSubscription(models.Model):
             if not old or old.type != self.type :
                 topics = Topic.objects.filter(forum=self.forum).exclude(subscribers=self.user)
                 self.user.subscriptions.add(*topics)
-        super(ForumSubscription, self).save()
+        super().save()
 
     def delete(self, all_topics=False):
         if all_topics:
             topics = Topic.objects.filter(forum=self.forum, subscribers=self.user)
             self.user.subscriptions.remove(*topics)
-        super(ForumSubscription, self).delete()
+        super().delete()
 
 
 class Topic(models.Model):
@@ -291,7 +291,7 @@ class Topic(models.Model):
     poll_question = models.TextField(_('Poll question'), blank=True, null=True)
     slug = models.SlugField(verbose_name=_("Slug"), max_length=255)
 
-    class Meta(object):
+    class Meta:
         ordering = ['-created']
         verbose_name = _('Topic')
         verbose_name_plural = _('Topics')
@@ -330,14 +330,14 @@ class Topic(models.Model):
             if self.forum != old_topic.forum:
                 forum_changed = True
 
-        super(Topic, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
         if forum_changed:
             old_topic.forum.update_counters()
             self.forum.update_counters()
 
     def delete(self, using=None):
-        super(Topic, self).delete(using)
+        super().delete(using)
         self.forum.update_counters()
 
     def update_counters(self):
@@ -369,7 +369,7 @@ class RenderableItem(models.Model):
     Base class for models that has markup, body, body_text and body_html fields.
     """
 
-    class Meta(object):
+    class Meta:
         abstract = True
 
     body = models.TextField(_('Message'))
@@ -394,7 +394,7 @@ class Post(RenderableItem):
     user_ip = models.GenericIPAddressField(_('User IP'), default='0.0.0.0')
     on_moderation = models.BooleanField(_('On moderation'), default=False)
 
-    class Meta(object):
+    class Meta:
         ordering = ['created']
         verbose_name = _('Post')
         verbose_name_plural = _('Posts')
@@ -422,7 +422,7 @@ class Post(RenderableItem):
             if old_post.topic != self.topic:
                 topic_changed = True
 
-        super(Post, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
         # If post is topic head and moderated, moderate topic too
         if self.topic.head == self and not self.on_moderation and self.topic.on_moderation:
@@ -445,7 +445,7 @@ class Post(RenderableItem):
         if self_id == head_post_id:
             self.topic.delete()
         else:
-            super(Post, self).delete(*args, **kwargs)
+            super().delete(*args, **kwargs)
             self.topic.update_counters()
             self.topic.forum.update_counters()
 
@@ -468,7 +468,7 @@ class Profile(PybbProfile):
     """
     user = OneToOneField(get_user_model_path(), related_name='pybb_profile', verbose_name=_('User'), on_delete=models.CASCADE)
 
-    class Meta(object):
+    class Meta:
         verbose_name = _('Profile')
         verbose_name_plural = _('Profiles')
 
@@ -480,7 +480,7 @@ class Profile(PybbProfile):
 
 
 class Attachment(models.Model):
-    class Meta(object):
+    class Meta:
         verbose_name = _('Attachment')
         verbose_name_plural = _('Attachments')
 
@@ -491,7 +491,7 @@ class Attachment(models.Model):
 
     def save(self, *args, **kwargs):
         self.size = self.file.size
-        super(Attachment, self).save(*args, **kwargs)
+        super().save(*args, **kwargs)
 
     def size_display(self):
         size = self.size
@@ -535,7 +535,7 @@ class TopicReadTracker(models.Model):
 
     objects = TopicReadTrackerManager()
 
-    class Meta(object):
+    class Meta:
         verbose_name = _('Topic read tracker')
         verbose_name_plural = _('Topic read trackers')
         unique_together = ('user', 'topic')
@@ -573,7 +573,7 @@ class ForumReadTracker(models.Model):
 
     objects = ForumReadTrackerManager()
 
-    class Meta(object):
+    class Meta:
         verbose_name = _('Forum read tracker')
         verbose_name_plural = _('Forum read trackers')
         unique_together = ('user', 'forum')
@@ -612,7 +612,7 @@ class PollAnswerUser(models.Model):
         unique_together = (('poll_answer', 'user', ), )
 
     def __str__(self):
-        return '%s - %s' % (self.poll_answer.topic, self.user)
+        return '{} - {}'.format(self.poll_answer.topic, self.user)
 
 
 def create_or_check_slug(instance, model, **extra_filters):
