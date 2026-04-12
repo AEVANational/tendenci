@@ -1,6 +1,4 @@
-from builtins import str
 import re
-import imghdr
 import calendar
 from ast import literal_eval
 from os.path import splitext, basename
@@ -8,6 +6,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 import requests
+from uuid import uuid4
+import os
 
 from django import forms
 from django.db.models import Q
@@ -24,6 +24,8 @@ from django.template.defaultfilters import filesizeformat
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib import messages
+from django.utils import timezone
+from django.core.files.storage import default_storage
 
 # from captcha.fields import CaptchaField
 from tendenci.apps.events.models import (
@@ -56,6 +58,7 @@ from tendenci.apps.base.forms import CustomCatpchaField
 from tendenci.apps.base.widgets import PercentWidget
 from tendenci.apps.base.forms import ProhibitNullCharactersValidatorMixin
 from tendenci.apps.files.validators import FileValidator
+from tendenci.apps.base.utils import correct_filename
 
 from .fields import UseCustomRegField
 from .widgets import UseCustomRegWidget
@@ -146,7 +149,7 @@ class EventFileForm(FormControlWidgetMixin, BetterModelForm):
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user')
-        super(EventFileForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields['file'].validators = [FileValidator()]
         if not settings.ALLOW_MP3_UPLOAD:
             if ('Audio', 'Audio') in self.fields['file_type'].widget.choices:
@@ -164,7 +167,7 @@ class EventFileSearchForm(FormControlWidgetMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
-        super(EventFileSearchForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 def management_forms_tampered(formsets=None):
@@ -195,7 +198,7 @@ class EventMonthForm(ProhibitNullCharactersValidatorMixin, forms.Form):
     
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
-        super(EventMonthForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         group_choices = get_search_group_choices()
         self.fields['group'].choices = [('','All Groups')] + list(group_choices)
@@ -229,7 +232,7 @@ class EventSearchForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
-        super(EventSearchForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         if user and not user.is_authenticated:
             del self.fields['registration']
@@ -248,7 +251,7 @@ class EventSearchForm(forms.Form):
         group_choices = get_search_group_choices()
         self.fields['event_group'].choices = [('','All')] + list(group_choices)
 
-        self.fields['start_dt'].initial = datetime.now().strftime('%Y-%m-%d')
+        self.fields['start_dt'].initial = timezone.now().strftime('%Y-%m-%d')
         # state
         if get_setting('module', 'events', 'stateusedropdown'):
             self.fields['state'] = StateSelectField(label=_('Select a State'),
@@ -266,7 +269,7 @@ class EventSearchForm(forms.Form):
                 self.fields[field].widget.attrs.update({'class': class_attr})
 
     def clean(self):
-        cleaned_data = super(EventSearchForm, self).clean()
+        cleaned_data = super().clean()
         q = self.cleaned_data.get('q', None)
         cat = self.cleaned_data.get('search_category', None)
 
@@ -289,13 +292,13 @@ class EventSimpleSearchForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
-        super(EventSimpleSearchForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         if user and not user.is_superuser:
             self.fields['search_category'].choices = SEARCH_CATEGORIES
 
     def clean(self):
-        cleaned_data = super(EventSimpleSearchForm, self).clean()
+        cleaned_data = super().clean()
         q = self.cleaned_data.get('q', None)
         cat = self.cleaned_data.get('search_category', None)
 
@@ -345,8 +348,11 @@ class CustomRegFormForField(forms.ModelForm):
         model = CustomRegField
         exclude = ["position"]
 
+    def __init__(self, *args, **kwargs):
+        super(CustomRegFormForField, self).__init__(*args, **kwargs)
+
     def clean(self):
-        cleaned_data = super(CustomRegFormForField, self).clean()
+        cleaned_data = super().clean()
         field_function = cleaned_data.get("field_function")
         field_type = cleaned_data.get("field_type")
         choices = cleaned_data.get("choices")
@@ -428,6 +434,7 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
         self.user = kwargs.pop('user', AnonymousUser)
         self.request = kwargs.pop('request', None)
         self.custom_reg_form = kwargs.pop('custom_reg_form', None)
+        self.edit_mode = kwargs.pop('edit_mode', None)
         self.event = kwargs.pop('event', None)
         self.entry = kwargs.pop('entry', None)
         self.form_index = kwargs.pop('form_index', None)
@@ -440,10 +447,10 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
         if self.event and not self.default_pricing:
             self.default_pricing = getattr(self.event, 'default_pricing', None)
 
-        super(FormForCustomRegForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         
-        max_length_dict = dict([(field.name, field.max_length) for field in Registrant._meta.fields\
-                                if hasattr(field, 'max_length')])
+        max_length_dict = {field.name: field.max_length for field in Registrant._meta.fields\
+                                if hasattr(field, 'max_length')}
         
         for field in self.form_fields:
             if field.map_to_field:
@@ -478,6 +485,7 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                     else:
                         default = False
             field_args["initial"] = field.default
+
             #if "queryset" in arg_names:
             #    field_args["queryset"] = field.queryset()
             if field_widget is not None:
@@ -486,7 +494,20 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                 if module == 'django.forms.extras':
                     module = 'django.forms.widgets'
                 field_args["widget"] = getattr(import_module(module), widget)
+            # if field.field_type == 'FileField':
+            #     field_args["validators"] = [FileValidator(allowed_extensions=['.jpg'])]
             self.fields[field_key] = field_class(**field_args)
+            if field.field_type == 'FileField':
+                # set max_size to 5M
+                self.fields[field_key].validators = [FileValidator(max_size=5242880)]
+                if self.edit_mode:
+                    if 'initial' in kwargs and kwargs['initial'][field_key]:
+                        # show the current file if exists
+                        if self.fields[field_key].help_text:
+                            self.fields[field_key].help_text += '. '
+                        self.fields[field_key].help_text += 'Current file: ' + \
+                                                            os.path.basename(kwargs['initial'][field_key])
+                    self.fields[field_key].required = False
 
         # add class attr registrant-email to the email field
         if hasattr(self.fields, 'email'):
@@ -599,7 +620,7 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
             if self.event.anony_setting != 'open':
 
                 # check if user is eligiable for this pricing
-                email = self.cleaned_data.get('email', u'')
+                email = self.cleaned_data.get('email', '')
                 registrant_user = self.get_user(email)
 
                 if not registrant_user.is_anonymous:
@@ -624,7 +645,7 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                 err_msg = ""
                 redirect_to_403 = False
                 if not email:
-                    err_msg = 'An email address is required for this price %s%s %s. ' % (
+                    err_msg = 'An email address is required for this price {}{} {}. '.format(
                         currency_symbol, pricing.price, pricing.title)
                 else:
                     if pricing.allow_user:
@@ -649,12 +670,12 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                                 messages.add_message(self.request, messages.ERROR, err_msg)
                         else:
                             if pricing.groups.all():
-                                err_msg = "We do not recognize %s as a member of any of the following %s." % (email, ', '.join(pricing.groups.values_list('name', flat=True)))
+                                err_msg = "We do not recognize {} as a member of any of the following {}.".format(email, ', '.join(pricing.groups.values_list('name', flat=True)))
                         if not err_msg:
-                            err_msg = 'Not eligible for the price.%s%s %s.' % (
+                            err_msg = 'Not eligible for the price.{}{} {}.'.format(
                                 currency_symbol,
                                 pricing.price,
-                                pricing.title,)
+                                pricing.title)
                         if len(self.pricings) > 1:
                             err_msg += ' Please choose another price option.'
                 if redirect_to_403:
@@ -718,6 +739,13 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                 raise forms.ValidationError(_('Free pass not available for "%s".' % corp_membership.corp_profile.name))
         return use_free_pass
 
+    def get_file_path(self, filename, field_id):
+        filename = correct_filename(filename)
+        return f'events/reg/fieldentry/{field_id}/{str(uuid4())}/{filename}'
+    
+    def handle_uploaded_file(self, f, field_id):
+        return default_storage.save(self.get_file_path(f.name, field_id), f)
+
     def save(self, event, **kwargs):
         """
         Create a FormEntry instance and related FieldEntry instances for each
@@ -725,9 +753,9 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
         """
         if event:
             if not self.entry:
-                entry = super(FormForCustomRegForm, self).save(commit=False)
+                entry = super().save(commit=False)
                 entry.form = self.custom_reg_form
-                entry.entry_time = datetime.now()
+                entry.entry_time = timezone.now()
                 entry.save()
             else:
                 entry = self.entry
@@ -737,9 +765,13 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                 else:
                     field_key = "field_%s" % field.id
                 value = self.cleaned_data.get(field_key, '')
-                if isinstance(value,list):
-                    value = ','.join(value)
-                if not value: value=''
+                if value:
+                    if isinstance(value, list):
+                        value = ','.join(value)
+                    elif field.field_type == 'FileField':
+                        value = self.handle_uploaded_file(value, field.id)
+                else: # no value
+                    value=''
 
                 field_entry = None
                 if self.entry:
@@ -747,7 +779,14 @@ class FormForCustomRegForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.M
                     if field_entries:
                         # field_entry exists, just do update
                         field_entry = field_entries[0]
-                        field_entry.value = value
+                        if field.field_type == 'FileField':
+                            if value:
+                                if field_entry.value:
+                                    # delete the old file before assigning the new value
+                                    default_storage.delete(field_entry.value)
+                                field_entry.value = value
+                        else:
+                            field_entry.value = value
                 if not field_entry:
                     #field_entry = CustomRegFieldEntry(field_id=field.id, entry=entry, value=value)
                     field_entry = CustomRegFieldEntry(field=field, entry=entry, value=value)
@@ -767,7 +806,7 @@ def _get_price_labels(pricing):
     end_dt = '<br/>&nbsp;(Ends ' + str(pricing.end_dt.date()) + ')'
     description = '<br/>&nbsp;<span style="font-weight: normal;">' + str(pricing.description) + '</span>'
 
-    return mark_safe('&nbsp;<strong><span data-price="%s">%s %s%s</span>%s</strong>%s' % (
+    return mark_safe('&nbsp;<strong><span data-price="{}">{} {}{}</span>{}</strong>{}'.format(
                                       pricing.price,
                                       tcurrency(pricing.price),
                                       pricing.title,
@@ -866,24 +905,24 @@ class EventForm(TendenciBaseForm):
         'storme_model':Event._meta.model_name.lower()}))
 
     start_dt = forms.SplitDateTimeField(label=_('Start Date/Time'),
-                                  initial=datetime.now()+timedelta(days=30),
+                                  initial=timezone.now()+timedelta(days=30),
                                   input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
                                   input_time_formats=['%I:%M %p', '%H:%M:%S'])
     end_dt = forms.SplitDateTimeField(label=_('End Date/Time'),
-                                initial=datetime.now()+timedelta(days=30, hours=2),
+                                initial=timezone.now()+timedelta(days=30, hours=2),
                                 input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
                                 input_time_formats=['%I:%M %p', '%H:%M:%S'])
     all_day = forms.BooleanField(label=_('All Day'), required=False, initial=False)
     start_event_date = forms.DateField(
         label=_('Start Date'),
-        initial=datetime.now().date()+timedelta(days=30),
+        initial=timezone.now().date()+timedelta(days=30),
         widget=forms.DateInput(attrs={'class':'datepicker'}))
     end_event_date = forms.DateField(
         label=_('End Date'),
-        initial=datetime.now().date()+timedelta(days=30),
+        initial=timezone.now().date()+timedelta(days=30),
         widget=forms.DateInput(attrs={'class':'datepicker'}))
 
-    photo_upload = forms.FileField(label=_('Photo'), required=False)
+    photo_upload = forms.ImageField(label=_('Photo'), required=False)
     remove_photo = forms.BooleanField(label=_('Remove the current photo'), required=False)
     groups = forms.ModelMultipleChoiceField(required=True, queryset=None, help_text=_('Hold down "Control", or "Command" on a Mac, to select more than one.'))
     primary_group = forms.ModelChoiceField(required=False, queryset=None)
@@ -1027,7 +1066,7 @@ class EventForm(TendenciBaseForm):
         self.recurring_mode = kwargs.pop('recurring_mode', False)
         is_template = kwargs.pop('is_template', False)
         parent_event_id = kwargs.pop('parent_event_id', None)
-        super(EventForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         if self.instance.pk:
             self.fields['parent'].queryset = self.fields['parent'].queryset.exclude(
@@ -1072,7 +1111,7 @@ class EventForm(TendenciBaseForm):
 
 
         if self.instance.image:
-            self.fields['photo_upload'].help_text = '<input name="remove_photo" id="id_remove_photo" type="checkbox"/> Remove current image: <a target="_blank" href="/files/%s/">%s</a>' % (self.instance.image.pk, basename(self.instance.image.file.name))
+            self.fields['photo_upload'].help_text = '<input name="remove_photo" id="id_remove_photo" type="checkbox"/> Remove current image: <a target="_blank" href="/files/{}/">{}</a>'.format(self.instance.image.pk, basename(self.instance.image.file.name))
         else:
             self.fields.pop('remove_photo')
         if not self.user.profile.is_superuser:
@@ -1177,28 +1216,8 @@ class EventForm(TendenciBaseForm):
             if 'repeat_of' in self.fields:
                 del self.fields['repeat_of']
 
-    def clean_photo_upload(self):
-        photo_upload = self.cleaned_data['photo_upload']
-        if photo_upload:
-            extension = splitext(photo_upload.name)[1]
-
-            # check the extension
-            if extension.lower() not in ALLOWED_LOGO_EXT:
-                raise forms.ValidationError(_('The photo must be of jpg, gif, or png image type.'))
-
-            # check the image header
-            image_type = '.%s' % imghdr.what('', photo_upload.read())
-            if image_type not in ALLOWED_LOGO_EXT:
-                raise forms.ValidationError(_('The photo is an invalid image. Try uploading another photo.'))
-
-            max_upload_size = get_max_file_upload_size()
-            if photo_upload.size > max_upload_size:
-                raise forms.ValidationError(_('Please keep filesize under %(max_upload_size)s. Current filesize %(upload_size)s') % {
-                                'max_upload_size': filesizeformat(max_upload_size),
-                                'upload_size': filesizeformat(photo_upload.size)})
-
-        return photo_upload
-
+        if 'photo_upload' in self.fields:
+            self.fields['photo_upload'].validators = [FileValidator(allowed_extensions=ALLOWED_LOGO_EXT)]
 
     def clean_end_recurring(self):
         end_recurring = self.cleaned_data.get('end_recurring', None)
@@ -1209,9 +1228,9 @@ class EventForm(TendenciBaseForm):
     def clean(self):
         if self.edit_mode and self.recurring_mode:
             # those 4 fields - start_dt, end_dt, start_event_date, and end_event_date - are excluded on recurring events
-            return super(EventForm, self).clean()
+            return super().clean()
         else:
-            cleaned_data = super(EventForm, self).clean()
+            cleaned_data = super().clean()
             start_dt = cleaned_data.get("start_dt")
             end_dt = cleaned_data.get("end_dt")
             start_event_date = cleaned_data.get('start_event_date')
@@ -1224,7 +1243,7 @@ class EventForm(TendenciBaseForm):
 
             if start_dt > end_dt:
                 errors = self._errors.setdefault("end_dt", ErrorList())
-                errors.append(_(u"This cannot be \
+                errors.append(_("This cannot be \
                     earlier than the start date."))
 
             parent = cleaned_data.get("parent")
@@ -1238,14 +1257,14 @@ class EventForm(TendenciBaseForm):
             if start_event_date and end_event_date:
                 if start_event_date > end_event_date:
                     errors = self._errors.setdefault("end_event_date", ErrorList())
-                    errors.append(_(u"This cannot be \
+                    errors.append(_("This cannot be \
                         earlier than the start date."))
 
             # Always return the full collection of cleaned data.
             return cleaned_data
 
     def save(self, *args, **kwargs):
-        event = super(EventForm, self).save(*args, **kwargs)
+        event = super().save(*args, **kwargs)
 
         # Reset time if All Day is selected
         if event.all_day:
@@ -1290,7 +1309,7 @@ class ApplyRecurringChangesForm(forms.Form):
 
 class TypeChoiceField(forms.ModelChoiceField):
 
-    def __init__(self, queryset, empty_label=u"---------",
+    def __init__(self, queryset, empty_label="---------",
                  required=True, widget=None, label=None, initial=None, choices=None,
                  help_text=None, to_field_name=None, *args, **kwargs):
 
@@ -1311,7 +1330,7 @@ class TypeChoiceField(forms.ModelChoiceField):
 
 class TypeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
-        super(TypeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         colorsets = TypeColorSet.objects.all()
 
@@ -1335,7 +1354,7 @@ class ReassignTypeForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         type_id = kwargs.pop('type_id')
-        super(ReassignTypeForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         event_types = Type.objects.exclude(pk=type_id)
 
@@ -1377,7 +1396,7 @@ class PlaceForm(FormControlWidgetMixin, forms.ModelForm):
         exclude = ()
 
     def __init__(self, *args, **kwargs):
-        super(PlaceForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Populate place
         places = Place.objects.all().order_by(
             'name', 'address', 'city', 'state', 'zip', 'country', '-pk').distinct(
@@ -1403,7 +1422,7 @@ class PlaceForm(FormControlWidgetMixin, forms.ModelForm):
 
     def save(self, *args, **kwargs):
         commit = kwargs.pop('commit', True)
-        place = super(PlaceForm, self).save(commit=False)
+        place = super().save(commit=False)
         # Handle case if place is given
         if self.cleaned_data.get('place'):
             place_obj = Place.objects.get(pk=self.cleaned_data.get('place'))
@@ -1476,7 +1495,7 @@ class SpeakerForm(FormControlWidgetMixin, BetterModelForm):
 
     def __init__(self, *args, **kwargs):
         kwargs.update({'use_required_attribute': False})
-        super(SpeakerForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.id:
             self.fields['description'].widget.mce_attrs['app_instance_id'] = self.instance.id
         else:
@@ -1544,7 +1563,7 @@ class OrganizerForm(ImageUploadFormMixin, FormControlWidgetMixin, forms.ModelFor
         )
 
     def __init__(self, *args, **kwargs):
-        super(OrganizerForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.id:
             self.fields['description'].widget.mce_attrs['app_instance_id'] = self.instance.id
         else:
@@ -1569,7 +1588,7 @@ class SponsorForm(ImageUploadFormMixin, FormControlWidgetMixin, forms.ModelForm)
         )
 
     def __init__(self, *args, **kwargs):
-        super(SponsorForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.id:
             self.fields['description'].widget.mce_attrs['app_instance_id'] = self.instance.id
         else:
@@ -1585,8 +1604,8 @@ class PaymentForm(forms.ModelForm):
 
 class Reg8nConfPricingForm(FormControlWidgetMixin, BetterModelForm):
     label = "Pricing"
-    start_dt = forms.SplitDateTimeField(label=_('Start Date/Time'), initial=datetime.now(), help_text=_('The date time this price starts to be available for registration'))
-    end_dt = forms.SplitDateTimeField(label=_('End Date/Time'), initial=datetime.now()+timedelta(days=30,hours=6), help_text=_('The date time this price ceases to be available for registration'))
+    start_dt = forms.SplitDateTimeField(label=_('Start Date/Time'), initial=timezone.now(), help_text=_('The date time this price starts to be available for registration'))
+    end_dt = forms.SplitDateTimeField(label=_('End Date/Time'), initial=timezone.now()+timedelta(days=30,hours=6), help_text=_('The date time this price ceases to be available for registration'))
     price = PriceField(label=_('Price'), max_digits=21, decimal_places=2, initial=0.00)
     #dates = Reg8nDtField(label=_("Start and End"), required=False)
     groups = forms.ModelMultipleChoiceField(required=False, queryset=None, help_text=_('Hold down "Control", or "Command" on a Mac, to select more than one. If you have selected one but want to leave groups unselected, hold down "Control" +Z, or "Command" +Z on Mac, then click on the selected group.'))
@@ -1601,9 +1620,9 @@ class Reg8nConfPricingForm(FormControlWidgetMixin, BetterModelForm):
         self.user = kwargs.pop('user', None)
         self.reg_form_required = kwargs.pop('reg_form_required', False)
         kwargs.update({'use_required_attribute': False})
-        super(Reg8nConfPricingForm, self).__init__(*args, **kwargs)
-        kwargs.update({'initial': {'start_dt':datetime.now(),
-                        'end_dt': (datetime(datetime.now().year, datetime.now().month, datetime.now().day, 17, 0, 0)
+        super().__init__(*args, **kwargs)
+        kwargs.update({'initial': {'start_dt':timezone.now(),
+                        'end_dt': (datetime(timezone.now().year, timezone.now().month, timezone.now().day, 17, 0, 0)
                         + timedelta(days=29))}})
         #self.fields['dates'].build_widget_reg8n_dict(*args, **kwargs)
         self.fields['allow_anonymous'].initial = True
@@ -1714,7 +1733,7 @@ class Reg8nConfPricingForm(FormControlWidgetMixin, BetterModelForm):
             if reg_form.is_template:
                 self.cleaned_data['reg_form'] = reg_form.clone()
 
-        return super(Reg8nConfPricingForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
 
 class Reg8nEditForm(FormControlWidgetMixin, BetterModelForm):
@@ -1835,7 +1854,7 @@ class Reg8nEditForm(FormControlWidgetMixin, BetterModelForm):
         kwargs.pop('user', None)
         reg_form_queryset = kwargs.pop('reg_form_queryset', None)
         self.recurring_edit = kwargs.pop('recurring_edit', False)
-        super(Reg8nEditForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         #custom_reg_form = CustomRegForm.objects.all()
         reg_form_choices = [('0', '---------')]
@@ -1999,7 +2018,7 @@ class Reg8nEditForm(FormControlWidgetMixin, BetterModelForm):
             if self.instance.use_custom_reg_form == '':
                 self.instance.use_custom_reg_form = False
 
-        return super(Reg8nEditForm, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     # def clean(self):
     #     from django.db.models import Sum
@@ -2033,7 +2052,7 @@ class RegistrationPreForm(forms.Form):
 
     def __init__(self, table_pricing, *args, **kwargs):
         self.table_only = kwargs.pop('table_only', False)
-        super(RegistrationPreForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fields['pricing'] = forms.ModelChoiceField(
                     queryset=table_pricing,
                     widget=forms.RadioSelect(),
@@ -2073,7 +2092,7 @@ class RegistrationForm(forms.Form):
         """
         self.user = kwargs.pop('user', None)
         self.count = kwargs.pop('count', 0)
-        super(RegistrationForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         reg_conf =  event.registration_configuration
 
@@ -2143,7 +2162,7 @@ class GratuityForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         self.reg_conf = kwargs.pop('reg_conf')
-        super(GratuityForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         
         if not self.reg_conf.gratuity_enabled:
             del self.fields['gratuity']
@@ -2259,6 +2278,7 @@ class RegistrantForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.Form):
         self.user = kwargs.pop('user', AnonymousUser)
         self.request = kwargs.pop('request', None)
         self.event = kwargs.pop('event', None)
+        self.edit_mode = kwargs.pop('edit_mode', None)
         self.form_index = kwargs.pop('form_index', None)
         self.pricings = kwargs.pop('pricings', None)
         self.validate_pricing = kwargs.pop('validate_pricing', True)
@@ -2268,12 +2288,12 @@ class RegistrantForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.Form):
         if self.event and not self.default_pricing:
             self.default_pricing = getattr(self.event, 'default_pricing', None)
 
-        super(RegistrantForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         reg_conf=self.event.registration_configuration
         
-        max_length_dict = dict([(field.name, field.max_length) for field in Registrant._meta.fields\
-                                if hasattr(field, 'max_length') and field.name in self.FIELD_NAMES])
+        max_length_dict = {field.name: field.max_length for field in Registrant._meta.fields\
+                                if hasattr(field, 'max_length') and field.name in self.FIELD_NAMES}
 
         # add changes in the stardard registration form
         for field_name in self.FIELD_NAMES:
@@ -2463,7 +2483,7 @@ class RegistrantForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.Form):
                                 messages.add_message(self.request, messages.ERROR, err_msg)
                         else:
                             if pricing.groups.all():
-                                err_msg = "We do not recognize %s as a member of any of the following %s." % (email, ', '.join(pricing.groups.values_list('name', flat=True)))
+                                err_msg = "We do not recognize {} as a member of any of the following {}.".format(email, ', '.join(pricing.groups.values_list('name', flat=True)))
                         if not err_msg:
                             err_msg = 'Not eligible for the price.%s%s %s.' \
                                         % (currency_symbol, pricing.price, pricing.title)
@@ -2530,6 +2550,7 @@ class RegistrantForm(FormControlWidgetMixin, AttendanceDatesMixin, forms.Form):
 class RegistrantBaseFormSet(BaseFormSet):
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  initial=None, error_class=ErrorList, **kwargs):
+        self.edit_mode = kwargs.pop('edit_mode', None)
         self.event = kwargs.pop('event', None)
         self.user = kwargs.pop('user', None)
         self.request = kwargs.pop('request', None)
@@ -2546,7 +2567,7 @@ class RegistrantBaseFormSet(BaseFormSet):
         if entries:
             self.entries = entries
         self.validate_primary_only = get_setting('module', 'events', 'validateprimaryregonly')
-        super(RegistrantBaseFormSet, self).__init__(data, files, auto_id, prefix,
+        super().__init__(data, files, auto_id, prefix,
                  initial, error_class)
 
     def _construct_form(self, i, **kwargs):
@@ -2557,6 +2578,7 @@ class RegistrantBaseFormSet(BaseFormSet):
         """
         defaults = {'auto_id': self.auto_id, 'prefix': self.add_prefix(i)}
 
+        defaults['edit_mode'] = self.edit_mode
         defaults['event'] = self.event
         defaults['user'] = self.user
         defaults['request'] = self.request
@@ -2602,7 +2624,7 @@ class RegistrantBaseFormSet(BaseFormSet):
                         raise forms.ValidationError(_(f"{email} is NOT your email address."))       
                 
                 # check if this email address is already used
-                if Registrant.objects.filter(user__email__iexact=email,
+                if not self.edit_mode and Registrant.objects.filter(user__email__iexact=email,
                                              registration__event=self.event,
                                              cancel_dt__isnull=True).exists():
                     if self.user.is_authenticated and email == self.user.email:
@@ -2610,7 +2632,7 @@ class RegistrantBaseFormSet(BaseFormSet):
                     raise forms.ValidationError(_(f'User {email} has already registered.'))
   
     def clean(self):
-        return_data = super(RegistrantBaseFormSet, self).clean()
+        return_data = super().clean()
         # check if we have enough available spaces for price options
         pricings = {}
         for form in self.forms:
@@ -2646,7 +2668,7 @@ class RegConfPricingBaseModelFormSet(BaseModelFormSet):
             self.reg_form_required = reg_form_required
         if user:
             self.user = user
-        super(RegConfPricingBaseModelFormSet, self).__init__(data=data, files=files, auto_id=auto_id, prefix=prefix,
+        super().__init__(data=data, files=files, auto_id=auto_id, prefix=prefix,
                  queryset=queryset, initial=initial, **kwargs)
 
     def _construct_form(self, i, **kwargs):
@@ -2659,11 +2681,11 @@ class RegConfPricingBaseModelFormSet(BaseModelFormSet):
             kwargs['reg_form_required'] = self.reg_form_required
         if hasattr(self, 'user'):
             kwargs['user'] = self.user
-        return super(RegConfPricingBaseModelFormSet, self)._construct_form(i, **kwargs)
+        return super()._construct_form(i, **kwargs)
         
 
     def clean(self):
-        return_data = super(RegConfPricingBaseModelFormSet, self).clean()
+        return_data = super().clean()
         # check and make sure the total of registration limit specified for each pricing
         # not exceed the limit set for this event
         pricing = getattr(self.forms[0], 'instance', None)
@@ -2674,7 +2696,7 @@ class RegConfPricingBaseModelFormSet(BaseModelFormSet):
                 for form in self.forms:
                     pricings_total_cap += form.cleaned_data.get('registration_cap', 0)
                 if pricings_total_cap > limit:
-                    raise forms.ValidationError(_('The registration limit set for this event is {0}, but the total limit specified for each pricing is {1}'.format(limit, pricings_total_cap)))
+                    raise forms.ValidationError(_('The registration limit set for this event is {}, but the total limit specified for each pricing is {}'.format(limit, pricings_total_cap)))
         return return_data
 
 
@@ -2703,7 +2725,7 @@ class MessageAddForm(forms.ModelForm):
         fields = ('subject', 'body', 'sender_display', 'reply_to')
 
     def __init__(self, event_id=None, *args, **kwargs):
-        super(MessageAddForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.id:
             self.fields['body'].widget.mce_attrs['app_instance_id'] = self.instance.id
         else:
@@ -2728,7 +2750,7 @@ class EmailForm(forms.ModelForm):
                   'body',)
 
     def __init__(self, *args, **kwargs):
-        super(EmailForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.instance.id:
             self.fields['body'].widget.mce_attrs['app_instance_id'] = self.instance.id
         else:
@@ -2771,7 +2793,7 @@ class PendingEventForm(EventForm):
                     ]
 
     def __init__(self, *args, **kwargs):
-        super(PendingEventForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         if self.instance.pk:
             self.fields['description'].widget.mce_attrs['app_instance_id'] = self.instance.pk
@@ -2840,7 +2862,7 @@ class AddonOptionForm(FormControlWidgetMixin, BetterModelForm):
 
 class AddonOptionBaseModelFormSet(BaseModelFormSet):
     def __init__(self, *args, **kwargs):
-        super(AddonOptionBaseModelFormSet, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.forms[0].empty_permitted = False
 
 
@@ -2862,7 +2884,7 @@ class GlobalRegistrantSearchForm(forms.Form):
     email = forms.CharField(label=_('Email'), required=False)
 
     def __init__(self, *args, **kwargs):
-        super(GlobalRegistrantSearchForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Set start date and end date
         if self.fields.get('start_dt'):
@@ -2900,7 +2922,7 @@ class UserMemberRegBaseForm(FormControlWidgetMixin, forms.Form):
     """
 
     def __init__(self, pricings, *args, **kwargs):
-        super(UserMemberRegBaseForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.fields['pricing'] = forms.ModelChoiceField(
             queryset=pricings,
@@ -2939,7 +2961,7 @@ class AssetsPurchaseForm(FormControlWidgetMixin, forms.ModelForm):
         self.user = kwargs.pop('request_user')
         self.event = event
         reg_conf = event.registration_configuration
-        super(AssetsPurchaseForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.fields['pricing'] = forms.ModelChoiceField(
             queryset=pricings,
@@ -2974,7 +2996,7 @@ class MemberRegistrationForm(UserMemberRegBaseForm):
                                  help_text=_("comma separated if multiple"))
 
     def __init__(self, event, pricings, *args, **kwargs):
-        super(MemberRegistrationForm, self).__init__(pricings, *args, **kwargs)
+        super().__init__(pricings, *args, **kwargs)
 
     def clean_member_ids(self):
         member_ids = self.cleaned_data['member_ids'].split(',')
@@ -2999,7 +3021,7 @@ class UserRegistrationForm(UserMemberRegBaseForm):
 
     def __init__(self, event, pricings, *args, **kwargs):
         self.event = event
-        super(UserRegistrationForm, self).__init__(pricings, *args, **kwargs)
+        super().__init__(pricings, *args, **kwargs)
 
         self.fields['user'].error_messages['required'
                                 ] = _('Please enter a valid user.')
@@ -3018,11 +3040,11 @@ class UserRegistrationForm(UserMemberRegBaseForm):
 class EventExportForm(FormControlWidgetMixin, forms.Form):
     start_dt = forms.DateField(
                 label=_('From'),
-                initial=datetime.now()-timedelta(days=365))
+                initial=timezone.now()-timedelta(days=365))
 
     end_dt = forms.DateField(
                 label=_('To'),
-                initial=datetime.now())
+                initial=timezone.now())
 
     by_type = forms.ModelChoiceField(
                 label=_("Filter by Type"),
@@ -3058,7 +3080,7 @@ class StandardRegAdminForm(forms.Form):
                         'email_required', 'email_visible']
 
     def __init__(self, *args, **kwargs):
-        super(StandardRegAdminForm, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         scope = 'module'
         scope_category = 'events'
 
@@ -3128,8 +3150,8 @@ class EventReportFilterForm(FormControlWidgetMixin, forms.Form):
                                        initial='')
 
     def __init__(self, *args, **kwargs):
-        super(EventReportFilterForm, self).__init__(*args, **kwargs)
-        now = datetime.now()
+        super().__init__(*args, **kwargs)
+        now = timezone.now()
         self.initial_start_dt = datetime(now.year, now.month, now.day, 0, 0, 0) - relativedelta(months=1)
         self.initial_end_dt = self.initial_start_dt + relativedelta(months=2)
         self.fields['start_dt'].initial = self.initial_start_dt
