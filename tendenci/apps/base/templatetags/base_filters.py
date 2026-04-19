@@ -4,6 +4,8 @@ import sys
 import pytz
 import codecs
 import phonenumbers
+import bleach
+
 from PIL import Image
 from dateutil.parser import parse
 from datetime import datetime, time
@@ -11,8 +13,6 @@ if sys.version_info >= (3, 13):
     from warnings import deprecated
 else:
     from typing_extensions import deprecated
-import bleach
-
 from decimal import Decimal
 from django.template import Library
 from django.conf import settings
