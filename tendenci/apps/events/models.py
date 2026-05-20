@@ -1201,7 +1201,7 @@ class Registration(models.Model):
                 refund_amount += registrant.amount
 
         # check for tax and tax_2
-        if self.invoice:
+        if self.invoice and get_setting('module','invoices', 'taxmodel') == 'Tax Added':
             if self.invoice.tax:
                 refund_amount += self.invoice.tax
             if self.invoice.tax_2:
@@ -1384,9 +1384,9 @@ class Registration(models.Model):
         invoice.assign_tax(price_tax_rate_list, primary_registrant.user)
 
         invoice.subtotal = self.amount_paid
-        if get_setting('module', 'invoices', 'taxmodel') == 'Tax Added': #tax added
+        if get_setting('module', 'invoices', 'taxmodel') == 'Tax Added':
             invoice.total = invoice.subtotal + invoice.tax + invoice.tax_2
-        else:
+        else: #tax inclucded
             invoice.total = invoice.subtotal
 
         if invoice.gratuity:
@@ -2302,7 +2302,10 @@ class AssetsPurchase(models.Model):
 
         invoice.assign_tax([(self.amount, 0)], request_user)
         invoice.subtotal = self.amount
-        invoice.total = self.amount + invoice.tax + invoice.tax_2
+        if get_setting('module','invoices','taxmodal') == 'Tax Added':
+            invoice.total = self.amount + invoice.tax + invoice.tax_2
+        else: #tax included
+            invoice.total = self.amount
         invoice.balance = invoice.total
         invoice.save()
 
