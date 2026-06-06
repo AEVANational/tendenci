@@ -3662,7 +3662,7 @@ class Event(TendenciBaseModel):
             set_s3_file_permission(self.image.file, public=self.is_public())
 
     def __str__(self):
-        return f'{self.title} ({self.start_dt.strftime(settings.SHORT_DATE_FORMAT)} - {self.end_dt.strftime(settings.SHORT_DATE_FORMAT)})'
+        return f'{self.title} ({self.start_dt.strftime(settings.STRFTIME_DATE_FORMAT)} - {self.end_dt.strftime(settings.STRFTIME_DATE_FORMAT)})'
 
     @property
     def can_edit_attendance_dates_admin(self):
