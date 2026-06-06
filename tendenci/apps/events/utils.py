@@ -27,11 +27,9 @@ from django.template.loader import render_to_string
 import simplejson
 from django.utils.html import strip_tags
 from django.utils.translation import gettext as _
-from django.utils import timezone as du_timezone
-
-from pytz import timezone
-from pytz import UnknownTimeZoneError
 from django.utils import timezone
+
+# from pytz import UnknownTimeZoneError
 
 from tendenci.apps.events.models import (Event, Place, Speaker, Organizer, Sponsor,
     Registration, RegistrationConfiguration, Registrant, RegConfPricing,
@@ -448,11 +446,17 @@ def get_ics_defaults():
 
 def format_event_date_as_utc(event_date, tz):
     if tz:
-        time_zone = TimeZone(tz)
+        time_zone = ZoneInfo(f'{tz}')
     else:
         time_zone = LOCAL_TIMEZONE
 
-    event_date_time_utc = du_timezone.localtime(du_timezone.make_aware(event_date, time_zone), du_timezone.utc)
+    # check if the event_date is timezone aware
+    if event_date.tzinfo is None or event_date.tzinfo.utcoffset(event_date) is None:
+        # not aware
+        event_date_time_utc = timezone.localtime(timezone.make_aware(event_date, time_zone), timezone.utc)
+    else:
+        event_date_time_utc = timezone.localtime(event_date, timezone.utc)
+
     return event_date_time_utc.strftime(ICAL_DATE_TIME_FORMAT)
 
 def get_ievent(request, d, event_id):
@@ -484,14 +488,14 @@ def get_ievent(request, d, event_id):
     # date time
 
     if event.start_dt:
-        e_str += "DTSTART:%s\r\n" % (format_event_date_as_utc(event.start_dt, event.time_zone))
+        e_str += "DTSTART:%s\r\n" % (format_event_date_as_utc(event.start_dt, event.timezone))
     if event.end_dt:
-        e_str += "DTEND:%s\r\n" % (format_event_date_as_utc(event.end_dt, event.time_zone))
+        e_str += "DTEND:%s\r\n" % (format_event_date_as_utc(event.end_dt, event.timezone))
 
     e_str += "CLASS:PUBLIC\r\n"
     e_str += "PRIORITY:5\r\n"
 
-    e_str += "DTSTAMP:{}\r\n".format(datetime.now(datetime.timezone.utc).strftime(ICAL_DATE_TIME_FORMAT))
+    e_str += "DTSTAMP:{}\r\n".format(datetime.now(timezone.utc).strftime(ICAL_DATE_TIME_FORMAT))
 
     e_str += "TRANSP:OPAQUE\r\n"
 
@@ -1980,8 +1984,8 @@ def event_import_process(import_i, preview=True):
                 invalid_reason = "INVALID DATE FORMAT. SHOULD BE: %s" % VALID_DATE_FORMAT
 
             try:
-                timezone(event_object_dict["timezone"])
-            except UnknownTimeZoneError as e:
+                ZoneInfo(event_object_dict["timezone"])
+            except ValueError as e:
                 invalid = True
                 invalid_reason = "UNKNOWN TIMEZONE %s" % event_object_dict["timezone"]
 
