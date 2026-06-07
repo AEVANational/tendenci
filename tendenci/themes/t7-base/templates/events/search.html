@@ -41,8 +41,8 @@
     <div class="highlight">
         You found {{ paginator.count }} event{{ paginator.count|pluralize }}
         {% if with_registration %}with registration{% endif %}{% if event_type %}.
-        {% elif past %} starting before {{ start_dt|date:"DATE_FORMAT" }}.
-        {% else %} starting on or after {{ start_dt|date:"DATE_FORMAT" }}.{% endif %}
+        {% elif past %} starting before {{ start_dt|date:'DATE_FORMAT' }}.
+        {% else %} starting on or after {{ start_dt|date:'DATE_FORMAT' }}.{% endif %}
     </div>
 
 {% if MODULE_EVENTS_GRIDVIEW_FOR_LISTVIEW %}
@@ -56,7 +56,7 @@
              </tr>
              {% for event in events %}
                 <tr>
-                    <td nowrap>{{ event.date }}</td>
+                    <td nowrap>{{ event.date|date:'DATE_FORMAT' }}</td>
                     <td><a href="{% url 'event' event.id %}">{{ event.title }}</a></td>
                     <td>
                     {% if event.type %}

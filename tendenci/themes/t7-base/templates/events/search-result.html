@@ -61,11 +61,11 @@
 
         <div class="time-period">
             {% if event.all_day %}
-            <time itemprop="startDate" datetime="{{ event.start_dt|date:'c' }}">{{ event.start_dt|date:"l" }}, {{ event.start_dt|date:"DATE_FORMAT" }}</time> -
-            <time itemprop="endDate" datetime="{{ event.end_dt|date:'c' }}">{{ event.end_dt|date:"l" }}, {{ event.end_dt|date:"DATE_FORMAT" }}</time>
+            <time itemprop="startDate" datetime="{{ event.start_dt|date:'c' }}">{{ event.start_dt|date:'l' }}, {{ event.start_dt|date:'DATE_FORMAT' }}</time> -
+            <time itemprop="endDate" datetime="{{ event.end_dt|date:'c' }}">{{ event.end_dt|date:'l' }}, {{ event.end_dt|date:'DATE_FORMAT' }}</time>
             {% else %}
-             <time itemprop="startDate" datetime="{{ event.start_dt|date:'c' }}">{{ event.start_dt|date:"l" }}, {{ event.start_dt|date:"DATE_TIME_FORMAT" }}</time> -
-             <time itemprop="endDate" datetime="{{ event.end_dt|date:'c' }}">{{ event.end_dt|date:"l" }}, {{ event.end_dt|date:"DATE_TIME_FORMAT" }}</time>
+             <time itemprop="startDate" datetime="{{ event.start_dt|date:'c' }}">{{ event.start_dt|date:"l" }}, {{ event.start_dt|date:"DATETIME_FORMAT" }}</time> -
+             <time itemprop="endDate" datetime="{{ event.end_dt|date:'c' }}">{{ event.end_dt|date:"l" }}, {{ event.end_dt|date:"DATETIME_FORMAT" }}</time>
             {% endif %}
         </div>
 
