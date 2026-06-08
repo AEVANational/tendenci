@@ -29,7 +29,7 @@ from tendenci.apps.memberships.utils import get_selected_demographic_field_names
 from tendenci.apps.memberships.middleware import ExceededMaxTypes
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.perms.utils import has_perm
-from tendenci.apps.theme.templatetags.static import static
+from tendenci.apps.theme.templatetags.tendenci_static import static
 from tendenci.apps.event_logs.models import EventLog
 
 

@@ -62,7 +62,7 @@ from tendenci.libs.boto_s3.utils import set_s3_file_permission
 from tendenci.libs.abstracts.models import OrderingBaseModel
 from tendenci.apps.trainings.models import Course, Certification
 from tendenci.apps.zoom import ZoomClient
-from tendenci.apps.theme.templatetags.static import static
+from tendenci.apps.theme.templatetags.tendenci_static import static
 
 # from south.modelsinspector import add_introspection_rules
 # add_introspection_rules([], [r'^timezone_field\.TimeZoneField'])
