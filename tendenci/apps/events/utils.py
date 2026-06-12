@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from datetime import date
 from zoneinfo import ZoneInfo
 import csv
-from dateutil_rs.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY
+from dateutil.rrule import rrule, DAILY, WEEKLY, MONTHLY, YEARLY
 from decimal import Decimal
 import dateutil.parser as dparser
 
