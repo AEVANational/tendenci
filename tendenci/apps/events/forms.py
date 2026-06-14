@@ -923,12 +923,12 @@ class EventForm(TendenciBaseForm):
 
     start_dt = forms.SplitDateTimeField(label=_('Start Date/Time'),
                                   initial=timezone.now()+timedelta(days=30),
-                                  input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-                                  input_time_formats=['%I:%M %p', '%H:%M:%S'])
+                                  input_date_formats=settings.DATE_INPUT_FORMATS,
+                                  input_time_formats=settings.TIME_INPUT_FORMATS,)
     end_dt = forms.SplitDateTimeField(label=_('End Date/Time'),
                                 initial=timezone.now()+timedelta(days=30, hours=2),
-                                input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-                                input_time_formats=['%I:%M %p', '%H:%M:%S'])
+                                input_date_formats=settings.DATE_INPUT_FORMATS,
+                                input_time_formats=settings.TIME_INPUT_FORMATS,)
     all_day = forms.BooleanField(label=_('All Day'), required=False, initial=False)
     start_event_date = forms.DateField(
         label=_('Start Date'),
