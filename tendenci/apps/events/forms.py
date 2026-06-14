@@ -3153,11 +3153,11 @@ def add_months(sourcedate, months):
 
 class EventReportFilterForm(FormControlWidgetMixin, forms.Form):
     start_dt = forms.SplitDateTimeField(label=_('Start Date/Time'), required=False,
-                                        input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-                                        input_time_formats=['%I:%M %p', '%H:%M:%S'])
+                                        input_date_formats=settings.DATE_INPUT_FORMATS,
+                                        input_time_formats=settings.TIME_INPUT_FORMATS,)
     end_dt = forms.SplitDateTimeField(label=_('End Date/Time'), required=False,
-                                      input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-                                      input_time_formats=['%I:%M %p', '%H:%M:%S'])
+                                      input_date_formats=settings.DATE_INPUT_FORMATS,
+                                      input_time_formats=settings.TIME_INPUT_FORMATS,)
     event_type = forms.CharField(required=False,)
     sort_by = forms.ChoiceField(required=False, choices=[('start_dt', _('Start Date')),
                                                          ('groups__name', _('Group Name')),],

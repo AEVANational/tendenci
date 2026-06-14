@@ -3,6 +3,7 @@ from datetime import datetime
 from django import forms
 from django.contrib.admin import widgets
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 
 from tendenci.apps.site_settings.utils import get_setting
 from tendenci.apps.videos.models import Video
@@ -14,8 +15,8 @@ from .utils import get_embedly_client
 
 class VideoForm(TendenciBaseForm):
     release_dt = forms.SplitDateTimeField(label=_('Release Date/Time'),
-                                          input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-                                          input_time_formats=['%I:%M %p', '%H:%M:%S'])
+                                          input_date_formats=[settings.DATE_INPUT_FORMATS],
+                                          input_time_formats=[settings.TIME_INPUT_FORMATS])
     description = forms.CharField(required=False,
         widget=TinyMCE(attrs={'style':'width:100%'},
         mce_attrs={'storme_app_label':Video._meta.app_label,

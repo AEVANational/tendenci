@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from django.utils.translation import gettext_lazy as _
 from django import forms
+from django.conf import settings
 
 from tendenci.libs.form_utils.forms import BetterForm
 from tendenci.apps.base.forms import FormControlWidgetMixin
@@ -34,14 +35,14 @@ class EventLogSearchForm(BetterForm):
     start_dt = forms.SplitDateTimeField(
         label=_('Start Date/Time'),
         required=False,
-        input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-        input_time_formats=['%I:%M %p', '%H:%M:%S']
+        input_date_formats=[settings.DATE_INPUT_FORMATS],
+        input_time_formats=[settings.TIME_INPUT_FORMATS],
     )
     end_dt = forms.SplitDateTimeField(
         label=_('End Date/Time'),
         required=False,
-        input_date_formats=['%Y-%m-%d', '%m/%d/%Y'],
-        input_time_formats=['%I:%M %p', '%H:%M:%S']
+        input_date_formats=[settings.DATE_INPUT_FORMATS],
+        input_time_formats=[settings.TIME_INPUT_FORMATS],
     )
     request_method = forms.ChoiceField(
         required=False,
