@@ -544,8 +544,6 @@
         
         {% latest_contributions user_this as contributions %}
         {% if  contributions %}
-        
-        
         <h3>{% trans "Contributions" %}</h3>
         <ul class="list-unstyled">
           {% for contribution in contributions|slice:":5" %}
@@ -559,17 +557,18 @@
         <div class="pager">
           <li class="next"> <a href="{% url "contribution.search" %}?q={{ user_this.username }}">{% trans 'View More' %} &rarr;</a></li>
         </div>
+        
+        {% else %}
+	      {% if user.profile.is_superuser %}
+	      <div>
+	        {% firstof request.user.first_name request.user.username %}, {% trans 'this person has not made any contributions yet.' %}
+	      </div>
+	      {% endif %}
+      	{% endif %}
+        
       </div>
       
-      {% else %}
       
-      {% if user.profile.is_superuser %}
-      <div>
-        {% firstof request.user.first_name request.user.username %}, {% trans 'this person has not made any contributions yet.' %}
-      </div>
-      {% endif %}
-      
-      {% endif %}
       
 	  {% if can_edit %}
       {% profile_meta %}
