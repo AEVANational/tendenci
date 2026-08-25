@@ -505,8 +505,8 @@ class RecurringPayment(models.Model):
                                                   model=self._meta.model_name)
         inv.object_id = self.id
         inv.title = "Recurring Payment Invoice for Billing Cycle {} - {}".format(
-                                           date_format(billing_cycle['start'], settings.SHORT_DATE_FORMAT),
-                                           date_format(billing_cycle['end'], settings.SHORT_DATE_FORMAT))
+                                           date_format(billing_cycle['start'], 'SHORT_DATE_FORMAT'),
+                                           date_format(billing_cycle['end'], 'SHORT_DATE_FORMAT'))
         inv.bill_to_user(self.user)
         inv.status = True
 
@@ -646,8 +646,8 @@ class RecurringPaymentInvoice(models.Model):
         if self.billing_cycle_start_dt and self.billing_cycle_end_dt:
             description = self.recurring_payment.description
             description += '(billing cycle from {} to {})'.format(
-                            date_format(self.billing_cycle_start_dt, settings.SHORT_DATE_FORMAT),
-                            date_format(self.billing_cycle_end_dt, settings.SHORT_DATE_FORMAT))
+                            date_format(self.billing_cycle_start_dt, 'SHORT_DATE_FORMAT'),
+                            date_format(self.billing_cycle_end_dt, 'SHORT_DATE_FORMAT'))
         else:
             description = payment.description
 
