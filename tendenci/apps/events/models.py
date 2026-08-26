@@ -2925,7 +2925,7 @@ class Event(TendenciBaseModel):
         """
         Child events available that are upcoming today.
         """
-        return self.child_events.filter(start_dt__date=timezone.localdate())
+        return self.child_events.filter(start_dt__date=timezone.localdate() if settings.USE_TZ else datetime.today())
 
     def sessions_availble_to_switch_to(self, request):
         """Sessions available for check-in other than the one currently selected"""
@@ -4019,17 +4019,18 @@ class Event(TendenciBaseModel):
         specificed parameters.
         """
         days = set()
+        date_func = timezone.localdate if settings.USE_TZ else datetime.date
 
         for event in self.child_events.filter(**params):
             spans = event.date_spans()
 
             for span in spans:
                 if span['same_date']:
-                    days.add(timezone.localdate(span['start_dt']))
+                    days.add(date_func(span['start_dt']))
                 else:
                     date_range = self.date_range(
                         span['start_dt'], span['end_dt'] + timedelta(days=1))
-                    date_range = [timezone.localdate(x) for x in date_range]
+                    date_range = [date_func(x) for x in date_range]
                     days.update(date_range)
 
         return sorted(days)

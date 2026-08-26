@@ -1,6 +1,7 @@
 from collections import OrderedDict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.utils import timezone
+from django.conf import settings
 
 from django.forms import ChoiceField, MultiValueField
 from django.forms.widgets import Widget
@@ -57,7 +58,7 @@ class Reg8nDtField(ChoiceField):
         instance = kwargs.get('instance', None)
         initial = kwargs.get('initial') or {}
 
-        today = timezone.localdate()
+        today = timezone.localdate() if settings.USE_TZ else datetime.today()
         one_hour = timedelta(hours=1)
 
         if instance:
