@@ -707,7 +707,7 @@ class RecurringPaymentInvoice(models.Model):
                 response_d['message_code'] = code
                 response_d['message_text'] = charge_response
             except Exception as e:
-                charge_response = e.message
+                charge_response = str(e)
                 response_d['response_reason_text'] = charge_response
                 response_d['message_text'] = charge_response[:200]
 
