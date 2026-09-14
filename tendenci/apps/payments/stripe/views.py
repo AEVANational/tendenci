@@ -31,6 +31,7 @@ from .forms import BillingInfoForm, AccountOnBoardingForm
 from .utils import (
     build_payment_intent_params,
     configure_stripe,
+    connected_account_request_options,
     payment_update_from_intent,
 )
 from tendenci.apps.site_settings.utils import get_setting
@@ -65,6 +66,9 @@ def _create_payment_intent_for_payment(payment, currency):
     """Create Customer (if auto-renew) and PaymentIntent; return (pi, membership, customer_id)."""
     configure_stripe(stripe)
     membership = _membership_for_auto_renew(payment)
+    # A customer only exists on the account that created it, so it has to be
+    # created on whichever account the PaymentIntent is charged on.
+    request_options = connected_account_request_options(payment)
     customer_id = None
     setup_future_usage = None
     if membership and membership.user:
@@ -72,6 +76,7 @@ def _create_payment_intent_for_payment(payment, currency):
             customer = stripe.Customer.create(
                 email=membership.user.email,
                 description='For membership auto renew',
+                **request_options,
             )
             customer_id = customer.id
             setup_future_usage = 'off_session'
@@ -443,7 +448,10 @@ def pay_online(request, payment_id, guid='', template_name='payments/stripe/payo
     save_billing_url = reverse(
         'stripe.save_billing', args=[payment.id, payment.guid])
 
-    connected_account_id = payment.invoice.stripe_connected_account(scope='standard')[0]
+    # Stripe.js has to be pointed at the same account the PaymentIntent was
+    # created on, otherwise the Payment Element cannot load the intent.
+    connected_account_id = connected_account_request_options(
+        payment).get('stripe_account', '')
     return render_to_resp(
         request=request,
         template_name=template_name,
@@ -498,14 +506,14 @@ def save_billing(request, payment_id, guid=''):
 
 def finalize(request, payment_id, guid=''):
     payment = get_object_or_404(Payment, pk=payment_id, guid=guid)
-    if not payment.payment_intent_id:
-        return HttpResponse(
-            json.dumps({'ok': False, 'error': 'not allowed'}),
-            content_type='application/json',
-            status=403,
-        )
+    if payment.is_approved:
+        return HttpResponseRedirect(
+            reverse('stripe.thank_you', args=[payment.id, payment.guid]))
 
-    payment_intent_id = request.GET.get('payment_intent')
+    # Stripe returns the confirmed intent on the query string. Fall back to the
+    # id stored at creation time for redirects that arrive without it.
+    payment_intent_id = (request.GET.get('payment_intent')
+                         or payment.payment_intent_id)
     if not payment_intent_id:
         messages.add_message(
             request, messages.ERROR,
@@ -513,25 +521,10 @@ def finalize(request, payment_id, guid=''):
         return HttpResponseRedirect(
             reverse('stripe.payonline', args=[payment.id, payment.guid]))
 
-    if payment_intent_id != payment.payment_intent_id:
-        return HttpResponse(
-            json.dumps({'ok': False, 'error': 'Payment confirmation mismatch'}),
-            content_type='application/json',
-            status=400,
-        )
-
-    if payment.is_approved:
-        return HttpResponseRedirect(
-            reverse('stripe.thank_you', args=[payment.id, payment.guid]))
-
     configure_stripe(stripe)
     try:
-        connected_account_id = payment.invoice.stripe_connected_account(scope='standard')[0]
-        if connected_account_id:
-            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id,
-                                                           stripe_account=connected_account_id)
-        else:
-            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        payment_intent = stripe.PaymentIntent.retrieve(
+            payment_intent_id, **connected_account_request_options(payment))
     except Exception as e:
         messages.add_message(request, messages.ERROR, str(e))
         return HttpResponseRedirect(
