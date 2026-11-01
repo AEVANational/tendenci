@@ -14,6 +14,7 @@ from tendenci.apps.payments.models import Payment
 from tendenci.apps.payments.stripe.utils import (
     build_payment_intent_params,
     charge_customer_off_session,
+    payment_method_code_from_intent,
     payment_update_from_intent,
     user_facing_stripe_message,
 )
@@ -167,6 +168,29 @@ class PaymentUpdateFromIntentTests(TestCase):
         self.assertIn('requires_payment_method', self.payment.response_reason_text)
         self.assertEqual(self.payment.trans_id, '')
 
+    def test_apple_pay_charge_replaces_cc(self):
+        self.payment.method = 'cc'
+        self.payment.save(update_fields=['method'])
+        intent = SimpleNamespace(
+            status='succeeded',
+            created=1,
+            latest_charge=SimpleNamespace(
+                id='ch_apple',
+                payment_method_details=SimpleNamespace(
+                    type='card',
+                    card=SimpleNamespace(
+                        wallet=SimpleNamespace(type='apple_pay')),
+                ),
+            ),
+        )
+        with patch.object(
+                self.payment.invoice, 'make_payment', return_value=True):
+            payment_update_from_intent(self.request, intent, self.payment)
+
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.method, 'applepay')
+        self.assertEqual(self.payment.trans_id, 'ch_apple')
+
 
 class ChargeCustomerOffSessionTests(TestCase):
     @patch('tendenci.apps.payments.stripe.utils.get_setting', return_value='usd')
@@ -202,7 +226,38 @@ class ChargeCustomerOffSessionTests(TestCase):
         self.assertEqual(create_kwargs['payment_method'], 'pm_card')
         self.assertEqual(
             create_kwargs['idempotency_key'], 'tendenci-rp-invoice-3-2500')
+        self.assertEqual(create_kwargs['expand'], ['latest_charge'])
         self.assertNotIn('payment_method_types', create_kwargs)
+        self.assertNotIn('method', response)
+
+    @patch('tendenci.apps.payments.stripe.utils.get_setting', return_value='usd')
+    @patch('tendenci.apps.payments.stripe.utils.configure_stripe')
+    @patch('tendenci.apps.payments.stripe.utils.customer_off_session_payment_method_id',
+           return_value='pm_payto')
+    def test_payto_charge_is_recorded(
+            self, mock_pm, mock_configure, mock_currency):
+        payment = MagicMock()
+        payment.id = 9
+        payment.guid = 'guid-9'
+        payment.amount = Decimal('25.00')
+        payment.description = 'RP'
+        payment.invoice.stripe_connected_account.return_value = (None, None)
+        stripe_module = MagicMock()
+        stripe_module.PaymentIntent.create.return_value = SimpleNamespace(
+            status='succeeded',
+            created=42,
+            latest_charge=SimpleNamespace(
+                id='ch_payto',
+                payment_method_details=SimpleNamespace(type='payto'),
+            ),
+        )
+
+        ok, response = charge_customer_off_session(
+            stripe_module, payment, 'cus_1')
+
+        self.assertTrue(ok)
+        self.assertEqual(response['method'], 'payto')
+        self.assertEqual(response['trans_id'], 'ch_payto')
 
     @patch('tendenci.apps.payments.stripe.utils.get_setting', return_value='usd')
     @patch('tendenci.apps.payments.stripe.utils.configure_stripe')
@@ -608,6 +663,43 @@ class FinalizeViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/thankyou/', response['Location'])
+
+
+class PaymentMethodCodeTests(SimpleTestCase):
+    def test_google_pay_and_payto_and_plain_card(self):
+        google = SimpleNamespace(
+            latest_charge=SimpleNamespace(
+                payment_method_details={
+                    'type': 'card',
+                    'card': {'wallet': {'type': 'google_pay'}},
+                },
+            ),
+        )
+        payto = SimpleNamespace(
+            latest_charge=SimpleNamespace(
+                payment_method_details=SimpleNamespace(type='payto'),
+            ),
+        )
+        card = SimpleNamespace(
+            latest_charge=SimpleNamespace(
+                payment_method_details=SimpleNamespace(
+                    type='card', card=SimpleNamespace(wallet=None)),
+            ),
+        )
+
+        self.assertEqual(payment_method_code_from_intent(google), 'googlepay')
+        self.assertEqual(payment_method_code_from_intent(payto), 'payto')
+        self.assertEqual(payment_method_code_from_intent(card), '')
+
+    def test_unexpanded_charge_uses_payment_method(self):
+        intent = SimpleNamespace(
+            latest_charge='ch_1',
+            payment_method=SimpleNamespace(
+                type='payto',
+                payto=SimpleNamespace(last4='1234'),
+            ),
+        )
+        self.assertEqual(payment_method_code_from_intent(intent), 'payto')
 
 
 class UserFacingStripeMessageTests(SimpleTestCase):

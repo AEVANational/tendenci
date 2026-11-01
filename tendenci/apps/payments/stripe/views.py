@@ -534,8 +534,11 @@ def finalize(request, payment_id, guid=''):
 
     configure_stripe(stripe)
     try:
+        retrieve_options = connected_account_request_options(payment)
+        # Charge details say whether this was a card, a wallet, or PayTo.
+        retrieve_options['expand'] = ['latest_charge']
         payment_intent = stripe.PaymentIntent.retrieve(
-            payment_intent_id, **connected_account_request_options(payment))
+            payment_intent_id, **retrieve_options)
     except Exception as e:
         messages.add_message(
             request, messages.ERROR,

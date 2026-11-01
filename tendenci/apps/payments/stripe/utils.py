@@ -93,13 +93,54 @@ def build_payment_intent_params(payment, currency, customer_id=None,
     return params
 
 
+def _stripe_value(obj, key):
+    if obj is None or isinstance(obj, str):
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+
 def _charge_id_from_intent(payment_intent):
-    latest_charge = getattr(payment_intent, 'latest_charge', None)
+    latest_charge = _stripe_value(payment_intent, 'latest_charge')
     if not latest_charge:
         return ''
     if isinstance(latest_charge, str):
         return latest_charge
-    return getattr(latest_charge, 'id', '') or ''
+    return _stripe_value(latest_charge, 'id') or ''
+
+
+# payments_payment.method values. Cards stay 'cc', set when the Payment is created.
+_METHOD_BY_WALLET = {
+    'apple_pay': 'applepay',
+    'google_pay': 'googlepay',
+}
+
+
+def payment_method_code_from_intent(payment_intent):
+    """
+    Return applepay, googlepay, or payto when the charge used one of those.
+
+    A plain card returns '' so the existing 'cc' value is left alone.
+    Wallet type lives on the Charge (card.wallet.type); PayTo is its own type.
+    """
+    charge = _stripe_value(payment_intent, 'latest_charge')
+    details = _stripe_value(charge, 'payment_method_details')
+    source = details
+    if source is None:
+        payment_method = _stripe_value(payment_intent, 'payment_method')
+        if payment_method is not None and not isinstance(payment_method, str):
+            source = payment_method
+    if source is None:
+        return ''
+
+    details_type = _stripe_value(source, 'type') or ''
+    if details_type == 'payto':
+        return 'payto'
+
+    card = _stripe_value(source, 'card')
+    wallet_type = _stripe_value(_stripe_value(card, 'wallet'), 'type') or ''
+    return _METHOD_BY_WALLET.get(wallet_type, '')
 
 
 def _stripe_object_id(value):
@@ -195,6 +236,7 @@ def charge_customer_off_session(stripe_module, payment, customer_id,
     params['payment_method'] = payment_method_id
     params['confirm'] = True
     params['off_session'] = True
+    params['expand'] = ['latest_charge']
     # Unattended retries must not charge the member twice.
     if idempotency_key:
         params['idempotency_key'] = idempotency_key
@@ -227,7 +269,7 @@ def charge_customer_off_session(stripe_module, payment, customer_id,
         return False, response
 
     if getattr(payment_intent, 'status', None) == 'succeeded':
-        return True, {
+        response = {
             'status_detail': 'approved',
             'response_code': '1',
             'response_subcode': '1',
@@ -242,6 +284,10 @@ def charge_customer_off_session(stripe_module, payment, customer_id,
             'message_text': 'Successful.',
             'payment_method_id': payment_method_id,
         }
+        method = payment_method_code_from_intent(payment_intent)
+        if method:
+            response['method'] = method
+        return True, response
 
     response = _failed_off_session_response(
         'PaymentIntent status=%s' % getattr(payment_intent, 'status', ''))
@@ -262,6 +308,9 @@ def payment_update_from_intent(request, payment_intent, payment):
             % payment_intent.created
         )
         payment.trans_id = _charge_id_from_intent(payment_intent)
+        method = payment_method_code_from_intent(payment_intent)
+        if method:
+            payment.method = method
     else:
         payment.response_code = 0
         payment.response_reason_code = 0
