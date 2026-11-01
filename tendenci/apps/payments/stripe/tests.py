@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpResponse
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from model_bakery import baker
@@ -15,6 +15,7 @@ from tendenci.apps.payments.stripe.utils import (
     build_payment_intent_params,
     charge_customer_off_session,
     payment_update_from_intent,
+    user_facing_stripe_message,
 )
 from tendenci.apps.payments.stripe.views import _create_payment_intent_for_payment
 
@@ -607,3 +608,38 @@ class FinalizeViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn('/thankyou/', response['Location'])
+
+
+class UserFacingStripeMessageTests(SimpleTestCase):
+    def test_card_decline_keeps_plain_stripe_message(self):
+        import stripe
+        exc = stripe.error.CardError(
+            'Your card was declined.', 'number', 'card_declined')
+
+        self.assertEqual(
+            user_facing_stripe_message(exc, 'fallback'),
+            'Your card was declined.',
+        )
+
+    def test_json_body_is_replaced(self):
+        import stripe
+        payload = (
+            '{"error": {"message": "No such payment_intent", '
+            '"request_log_url": "https://dashboard.stripe.com/logs/req_1"}}'
+        )
+        exc = stripe.error.InvalidRequestError(payload, 'payment_intent')
+
+        self.assertEqual(
+            user_facing_stripe_message(exc, 'Please try again.'),
+            'Please try again.',
+        )
+
+    def test_card_error_with_json_message_uses_fallback(self):
+        import stripe
+        exc = stripe.error.CardError(
+            '{"error": {"message": "raw"}}', None, 'card_declined')
+
+        self.assertEqual(
+            user_facing_stripe_message(exc, 'Your card was declined.'),
+            'Your card was declined.',
+        )

@@ -1,9 +1,13 @@
+import logging
 import math
 
+import stripe
 from django.conf import settings
 
 from tendenci import __version__ as tendenci_version
 from tendenci.apps.site_settings.utils import get_setting
+
+logger = logging.getLogger(__name__)
 
 
 def stripe_set_app_info(stripe):
@@ -20,6 +24,37 @@ def configure_stripe(stripe_module):
     stripe_module.api_key = getattr(settings, 'STRIPE_SECRET_KEY', '')
     stripe_module.api_version = settings.STRIPE_API_VERSION
     stripe_set_app_info(stripe_module)
+
+
+def _plain_card_message(text):
+    """Card decline copy Stripe intends for a customer, or '' if it is a payload."""
+    if not isinstance(text, str):
+        return ''
+    text = ' '.join(text.split())
+    if not text or len(text) > 240:
+        return ''
+    if text[0] in '{[' or '<' in text or '>' in text:
+        return ''
+    lowered = text.lower()
+    if '"error"' in lowered or 'request_log_url' in lowered or 'http_body' in lowered:
+        return ''
+    return text
+
+
+def user_facing_stripe_message(exc, fallback):
+    """
+    Sentence safe to put in a Django message.
+
+    The base theme renders messages with |safe, so Stripe's exception text
+    (request ids and raw JSON bodies) must not be shown. Card declines keep
+    Stripe's customer message when it is plain text. The original error is logged.
+    """
+    logger.error('Stripe error: %s', exc, exc_info=exc)
+    if isinstance(exc, stripe.error.CardError):
+        plain = _plain_card_message(getattr(exc, 'user_message', None))
+        if plain:
+            return plain
+    return fallback
 
 
 def build_payment_intent_params(payment, currency, customer_id=None,
